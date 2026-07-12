@@ -1,0 +1,16 @@
+# Edgar's search profile.
+# Phase 1 reads filter settings from here; Phase 2 grows this into the full
+# fit-scoring profile. The values below are PLACEHOLDERS — edit them.
+
+[search]
+# A posting matches if its title/company hits at least one of these.
+keywords = ["software engineer", "backend", "robotics", "embedded"]
+
+# Locations you'd accept. "remote" will get special handling later.
+locations = ["remote"]
+
+# Skip a posting outright if it matches one of these, even if a keyword hits.
+exclude_keywords = []
+
+[meta]
+season = "Summer 2027"

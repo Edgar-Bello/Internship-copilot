@@ -1,0 +1,20 @@
+# Virtual environment — rebuildable from pyproject.toml, never committed
+.venv/
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Local data: the SQLite db is machine state, not source
+data/
+
+# Secrets (Anthropic API key in Phase 2) — git history is forever
+.env
+
+# Tool caches and build artifacts
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Claude Code per-machine settings (shared settings.json WOULD be committed)
+.claude/settings.local.json
