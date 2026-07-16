@@ -53,3 +53,11 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
 - 2026-07-12 (session 1): scaffold created. Next: Phase 1, slice 1 — verify a
   Summer 2027 community list exists (candidate: SimplifyJobs), fetch it, print
   postings. Keep this section updated each session.
+- 2026-07-16 (session 2): slice 1 DONE. SimplifyJobs has no 2027 repo; verified
+  source is vanshb03/Summer2027-Internships (branch dev,
+  .github/scripts/listings.json via raw endpoint). src/copilot/sources.py
+  fetches + filters (season==Summer, active, is_visible) -> 64 postings, one
+  line each. Data notes for later: near-duplicate rows (e.g. Kudu Dynamics x3,
+  same role/city, different id+url), `source` field = list contributor, one
+  mojibake company name. Next: push repo to GitHub (no remote yet), then
+  slice 2 — SQLite ingestion (idempotent re-runs, dedupe, new-since-run diff).
