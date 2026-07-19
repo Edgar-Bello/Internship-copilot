@@ -70,3 +70,29 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   fix-forward, keep main green. Next: ingest() in storage.py (set-diff new
   detection, parameterized INSERT, explicit commit) + __main__.py orchestrator
   (fetch -> ingest all -> report new Summer postings).
+- 2026-07-19 (session 4): slice 2 DONE — pipeline works end to end. ingest()
+  (set-diff on (source, id), parameterized INSERT, explicit commit) +
+  __main__.py: first run stored 197 rows / 64 Summer shown; rerun 0/0 =
+  idempotence verified. Lessons: feed key `id` != our column `source_id`
+  (translate names at the boundary, in one place); stale 9-col table predated
+  final schema — IF NOT EXISTS never alters, inspect with PRAGMA table_info,
+  rule: empty/rebuildable state -> delete+recreate, precious -> ALTER
+  migration. Next: slice 3, the read side — `python -m copilot report`:
+  tomllib profile (rb mode), facts in SQL (WHERE season/active/visible, ORDER
+  BY date_posted DESC), opinions in Python (keyword/exclude vs title,
+  case-insensitive), sqlite3.Row in get_connection, sys.argv dispatch in
+  __main__. Locations/"remote" matching deferred.
+- 2026-07-19 (session 4, cont.): slice 3 DONE — `python -m copilot report`
+  works: 36 of 64 stored Summer postings match profile keywords (incl.
+  "developer", Edgar's first real profile edit). report.py (tomllib rb,
+  facts-SQL + opinions-Python split), argv dispatch in __main__. BUG OF THE
+  WEEK: adding row_factory=sqlite3.Row for the read side silently broke
+  ingest's set-diff (Row != tuple, membership always False) -> every posting
+  looked new -> the PRIMARY KEY turned it into a loud IntegrityError. Fixed:
+  build known-set as explicit tuples. Lesson: shared connection config couples
+  read and write sides; schema constraints are the last line of defense that
+  make silent bugs loud. Report code written by Claude this round (Edgar
+  attempted first; owes explain-backs). Mojibake company still visible in
+  output (parked). Next: Edgar strips stale YOU-scaffold comments in
+  storage.py, commits + pushes; then slice 4 — application status lifecycle
+  (interested/applied/rejected on postings, report filters by status).
