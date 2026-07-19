@@ -1,6 +1,7 @@
 import requests
 
 LISTINGS_URL = "https://raw.githubusercontent.com/vanshb03/Summer2027-Internships/dev/.github/scripts/listings.json"
+SOURCE_NAME = "vanshb03"
 
 def fetch_listings() -> list[dict]:
     resp = requests.get(LISTINGS_URL, timeout=30)

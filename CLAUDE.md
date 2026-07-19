@@ -61,7 +61,7 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   same role/city, different id+url), `source` field = list contributor, one
   mojibake company name. Next: push repo to GitHub (no remote yet), then
   slice 2 — SQLite ingestion (idempotent re-runs, dedupe, new-since-run diff).
-- 2026-07-16 (session 3): pushed to GitHub (Edgar-Bello/Internship-copilot).
+- 2026-07-16 (session 3): pushed to GitHub (Edgar-Bello/ Internship-copilot).
   storage.py done: postings table (12 cols, PK = (source, source_id)),
   get_connection() idempotent, smoke-tested, ruff clean. Design decisions:
   identity = (source, source_id) namespaced per list, NOT url; store ALL
