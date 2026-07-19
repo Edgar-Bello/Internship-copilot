@@ -4,7 +4,7 @@
 
 [search]
 # A posting matches if its title/company hits at least one of these.
-keywords = ["software engineer", "backend", "robotics", "embedded"]
+keywords = ["software engineer", "backend", "robotics", "embedded", "developer",]
 
 # Locations you'd accept. "remote" will get special handling later.
 locations = ["remote"]
