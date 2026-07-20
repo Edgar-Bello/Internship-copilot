@@ -35,8 +35,12 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
 1. **Aggregator + tracker:** permitted sources -> normalized SQLite (in data/),
    idempotent ingestion, dedupe, new-since-last-run diff, filters from
    profile.toml, ranked to-do list, application status lifecycle.
-2. **Fit scoring + drafting:** score postings against resume/profile; Anthropic
-   API drafts cover letters and resume-bullet emphasis — always human-edited.
+2. **Fit scoring + drafting:** score postings against resume/profile; LLM API
+   drafts cover letters and resume-bullet emphasis — always human-edited.
+   Decision 2026-07-20: uses Edgar's school-provided OpenAI key (gpt-5.2,
+   confirmed OK for personal projects, key never committed) instead of the
+   Anthropic API. Strategy note: Edgar applies to ALL keyword matches; scoring
+   is for effort ordering + per-posting tailoring, NOT filtering.
 3. **Assisted apply:** Playwright opens the posting, pre-fills obvious fields,
    hard stop before submit.
 
@@ -47,6 +51,8 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
 - Tests: `.venv\Scripts\python.exe -m pytest`
 - Lint: `.venv\Scripts\python.exe -m ruff check .`
 - src-layout: the package is `src/copilot/`; `data/` and `.env` are gitignored.
+- .env (gitignored, values never committed) must define OPENAI_API_KEY and
+  OPENAI_BASE_URL (the school's proxy endpoint — the key only works there).
 
 ## Status
 
