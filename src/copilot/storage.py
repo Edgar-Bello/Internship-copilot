@@ -6,12 +6,18 @@ from datetime import datetime, timezone
 DB_PATH = pathlib.Path("data/copilot.db")
 
 CREATE_SQL = """CREATE TABLE IF NOT EXISTS postings (
-source TEXT, source_id TEXT, company TEXT, title TEXT, url TEXT, locations TEXT, season TEXT, sponsorship TEXT, active INTEGER, is_visible INTEGER, date_posted INTEGER, first_seen TEXT, status TEXT NOT NULL DEFAULT 'new', PRIMARY KEY (source, source_id))"""
+source TEXT, source_id TEXT, company TEXT, title TEXT, url TEXT, locations TEXT, 
+season TEXT, sponsorship TEXT, active INTEGER, is_visible INTEGER, date_posted INTEGER, 
+first_seen TEXT, status TEXT NOT NULL DEFAULT 'new', PRIMARY KEY (source, source_id))"""
 
 INSERT_SQL = """INSERT INTO postings (
     source, source_id, company, title, url, locations,
     season, sponsorship, active, is_visible, date_posted, first_seen
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+
+CREATE_SCORES_SQL = """CREATE TABLE IF NOT EXISTS scores (
+    source TEXT, source_id TEXT, score INTEGER, rationale TEXT, emphasize TEXT, 
+    red_flags TEXT, model TEXT, scored_at TEXT, PRIMARY KEY (source, source_id))"""
 
 ALLOWED_STATUSES = ("new", "seen", "interested", "applied", "rejected")
 
@@ -21,6 +27,7 @@ def get_connection() -> sqlite3.Connection:
     connection.row_factory = sqlite3.Row  # before any query, so helpers can use row["name"]
     connection.execute(CREATE_SQL)
     _ensure_status_column(connection)
+    connection.execute(CREATE_SCORES_SQL)
     return connection
 
 def _ensure_status_column(connection: sqlite3.Connection) -> None:
@@ -76,4 +83,4 @@ def ingest(conn: sqlite3.Connection, source_name: str, postings: list[dict]) -> 
 
 if __name__ == "__main__":
     conn = get_connection()
-    print(conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall())
+    print([row["name"] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()])
