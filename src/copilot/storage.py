@@ -80,6 +80,23 @@ def ingest(conn: sqlite3.Connection, source_name: str, postings: list[dict]) -> 
     conn.commit()
     return new
 
+def insert_score(conn, source, source_id, assessment, model):
+    """Store one score. Plain INSERT on purpose: a duplicate means the caller's
+    skip logic is broken, and the PK must make that loud, not paper over it."""
+    conn.execute(
+        "INSERT INTO scores (source, source_id, score, rationale, emphasize, red_flags, model, scored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            source,
+            source_id,
+            assessment.score,
+            assessment.rationale,
+            json.dumps(assessment.emphasize),
+            json.dumps(assessment.red_flags),
+            model,
+            datetime.now(timezone.utc).isoformat()
+        )
+    )
+    conn.commit()
 
 if __name__ == "__main__":
     conn = get_connection()

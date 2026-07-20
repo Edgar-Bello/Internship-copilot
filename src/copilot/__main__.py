@@ -1,12 +1,15 @@
 """Entry point for the co-pilot.
 
 Usage:
-  .venv\\Scripts\\python.exe -m copilot           fetch + store, show new Summer postings
-  .venv\\Scripts\\python.exe -m copilot report    show stored postings matching profile.toml
+  .venv\\Scripts\\python.exe -m copilot                          fetch + store, show new Summer postings
+  .venv\\Scripts\\python.exe -m copilot report                   show stored postings matching profile.toml
+  .venv\\Scripts\\python.exe -m copilot mark <id-prefix> <status>  set a posting's status
+  .venv\\Scripts\\python.exe -m copilot score                    score unscored matching postings
 """
 import sys
 
 from copilot.report import report
+from copilot.scoring import score_matching
 from copilot.sources import SOURCE_NAME, fetch_listings, summer_postings
 from copilot.storage import ALLOWED_STATUSES, get_connection, ingest, set_status
 
@@ -28,6 +31,8 @@ if __name__ == "__main__":
             print(f"marked {prefix}* as {status}")
         else:
             print(f"{changed} postings match {prefix!r} - nothing changed, use a longer prefix")
+    elif len(sys.argv) > 1 and sys.argv[1] == "score":
+        score_matching(get_connection())
     else:
         listings = fetch_listings()
         conn = get_connection()
