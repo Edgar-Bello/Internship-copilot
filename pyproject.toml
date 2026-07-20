@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Internship application co-pilot: aggregate, track, draft - human in control"
 requires-python = ">=3.14"
 dependencies = [
-    "requests",
+    "requests", "openai", "python-dotenv",
 ]
 
 [project.optional-dependencies]
