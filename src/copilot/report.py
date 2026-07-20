@@ -12,16 +12,15 @@ ORDER BY date_posted DESC"""
 def load_profile() -> dict:
     with open(PROFILE_PATH, "rb") as f:
         return tomllib.load(f)
-
-def report(conn) -> None:
+    
+def matching_postings(conn) -> list:
+    """Return postings matching the keywords in profile.toml."""
     search = load_profile()["search"]
-    # Normalize once here so matching is case-insensitive no matter how
-    # profile.toml is typed.
     keywords = [kw.lower() for kw in search["keywords"]]
     excludes = [ex.lower() for ex in search["exclude_keywords"]]
 
     rows = conn.execute(SELECT_SUMMER_SQL).fetchall()
-    shown = 0
+    result = []
     for row in rows:
         title = row["title"].lower()
         if not any(kw in title for kw in keywords):
@@ -30,8 +29,13 @@ def report(conn) -> None:
             continue  # exclude wins even when a keyword hit
         if row["status"] == "rejected":
             continue
+        result.append(row)
+    return result
+
+def report(conn) -> None:
+    rows = matching_postings(conn)
+    for row in rows:
         first_location = json.loads(row["locations"])[0]
         print(f"{row["source_id"][:8]} - {row["status"]}")
         print(f"{row['company']} - {row['title']} - {first_location}")
-        shown += 1
-    print(f"{shown} matching Summer postings (db has {len(rows)} Summer total)")
+    print(f"{len(rows)} matching Summer postings")
