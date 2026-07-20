@@ -112,3 +112,16 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   db now holds precious status data, table-level surgery only). Next: scoring
   prompt + structured outputs in llm.py, `score` command with set-diff skip,
   report ordered by score.
+- 2026-07-20 (session 5, cont.): scoring pipeline BUILT, not yet run.
+  llm.score_posting (responses.parse + pydantic FitAssessment, Optional
+  narrowed at boundary a la raise_for_status), storage.insert_score (plain
+  INSERT — Edgar's OR REPLACE would have neutered the PK backstop; docstring
+  says why), scoring.score_matching (skip-set, per-row commit for crash-resume),
+  `score` dispatch. Refactor: matching_postings extracted from report (summary
+  line meaning drifted twice before landing honest). Feed has NO descriptions:
+  scores are metadata-only, coarse by design. Layering now: sources=feed,
+  llm=model, storage=SQL, scoring=conductor, report=read, __main__=routing.
+  NEXT SESSION OPENS WITH: Edgar runs first `python -m copilot score` after
+  paying rituals — cost estimate, Kudu prediction, rerun-skip prediction, and
+  the owed answer: when would OR REPLACE be the right tool? Then: report
+  ordered by score, showing rationale/emphasize.
