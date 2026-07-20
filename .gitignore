@@ -11,6 +11,9 @@ data/
 # Secrets (Anthropic API key in Phase 2) — git history is forever
 .env
 
+#Resume in plain text format, not markdown
+resume.md
+
 # Tool caches and build artifacts
 .pytest_cache/
 .ruff_cache/

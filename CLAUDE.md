@@ -102,3 +102,13 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   output (parked). Next: Edgar strips stale YOU-scaffold comments in
   storage.py, commits + pushes; then slice 4 — application status lifecycle
   (interested/applied/rejected on postings, report filters by status).
+- 2026-07-20 (session 5): Phase 2 STARTED. llm.py smoke test works — school key
+  requires OPENAI_BASE_URL (school proxy; 401 lesson: remote auth rejection vs
+  local missing-key). resume.md created by hand, gitignored (repo stays
+  public). Slice 4 note: "seen" status = looked at, undecided. Scores design
+  by ballot: score 1-5 INTEGER + rationale + emphasize + red_flags (JSON
+  text) + model + scored_at, PK (source, source_id), score-once/skip-existing
+  policy. scores DDL in review (PK was missing — caught before first run;
+  db now holds precious status data, table-level surgery only). Next: scoring
+  prompt + structured outputs in llm.py, `score` command with set-diff skip,
+  report ordered by score.
