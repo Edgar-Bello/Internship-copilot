@@ -125,3 +125,35 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   paying rituals — cost estimate, Kudu prediction, rerun-skip prediction, and
   the owed answer: when would OR REPLACE be the right tool? Then: report
   ordered by score, showing rationale/emphasize.
+- 2026-07-21 (session 6): PHASE 2 COMPLETE. First real `score` run: 36 postings
+  scored (~15c; Edgar's estimate was 10x high), distribution 1x5 / 11x4 / 20x3 /
+  4x2; rerun skipped all 36 = idempotence on the expensive path. Model caught a
+  real eligibility signal from metadata alone: Apple Masters 2 vs Apple Undergrad
+  4. Kudu scored 4 (Edgar predicted 3 — generic titles let a strong resume
+  dominate). report now LEFT JOINs scores, ORDER BY score DESC (LEFT not INNER:
+  inner would silently drop unscored rows). `draft <id-prefix>` writes
+  drafts/<company>-<id8>.md (gitignored) with an UNREVIEWED header; plain
+  responses.create + output_text, NOT structured outputs — prose has no fields.
+  Anti-hallucination prompt verified by audit: every claim traced to a resume
+  line, nothing invented about Amazon. Known gaps, none blocking: report still
+  2 lines/posting (format once caused a false bug report), mojibake in stored
+  rationales (Windows console encoding), NO TESTS ANYWHERE, __main__ if/elif
+  chain wants argparse at 5+ commands. Next: test suite before Phase 3
+  (Playwright is the riskiest phase; regression net first).
+- 2026-07-21 (session 6, cont.): descriptions.py + overwrite guard + rescore.
+  MAJOR DATA FINDING: only 2 of 15 Greenhouse/Ashby postings are still live on
+  the employer's board — 13 are delisted while the feed still says active=true.
+  Verified not a mapping bug (ether.fi board lists 11 jobs, none is the feed's
+  "GTM Engineer Intern"; ATS pages return 200 because they are JS shells).
+  Treat feed `active` as unreliable. descriptions.fetch_description handles
+  Greenhouse (/board/jobs/id + /embed/job_app?for=&token=, HTML stripped) and
+  Ashby (board API, descriptionPlain); returns None otherwise. supports()
+  distinguishes delisted from unsupported so draft can say which. draft now
+  writes a grounded "why this role" paragraph ONLY with a real description,
+  else says so; refuses to overwrite an existing draft without --force (an
+  edited draft is precious). score --force rescores all (insert_score gained
+  replace= -> OR REPLACE, the one case where it is correct).
+  NEXT: feed descriptions into SCORING too — Anduril scored 4 with no red flag
+  for "U.S. Person status is required", which is stated plainly in its
+  description. One `score --force` run then fixes both stale-resume and
+  metadata-only scoring. After that: tests, then Phase 3.

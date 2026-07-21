@@ -80,11 +80,16 @@ def ingest(conn: sqlite3.Connection, source_name: str, postings: list[dict]) -> 
     conn.commit()
     return new
 
-def insert_score(conn, source, source_id, assessment, model):
-    """Store one score. Plain INSERT on purpose: a duplicate means the caller's
-    skip logic is broken, and the PK must make that loud, not paper over it."""
+def insert_score(conn, source, source_id, assessment, model, replace=False):
+    """Store one score.
+
+    Plain INSERT by default: an unexpected duplicate means the caller's skip logic
+    is broken, and the PK must make that loud rather than paper over it. `replace`
+    is for the one case where overwriting IS the intent - an explicit rescore.
+    """
+    verb = "INSERT OR REPLACE" if replace else "INSERT"
     conn.execute(
-        "INSERT INTO scores (source, source_id, score, rationale, emphasize, red_flags, model, scored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        f"{verb} INTO scores (source, source_id, score, rationale, emphasize, red_flags, model, scored_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         (
             source,
             source_id,
