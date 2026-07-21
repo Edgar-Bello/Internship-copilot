@@ -169,3 +169,19 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   and more useful than the number (Apple Masters moved 2->3 but kept its
   "targets Masters, resume is BS 2028" flag). This vindicates the 1-5 tier
   ballot over 0-100. Next: tests (still zero), then Phase 3.
+- 2026-07-21 (session 6, cont.3): `check` command + description cache.
+  Migration generalized: _ensure_status_column -> _ensure_column(conn, table,
+  column, ddl) driven by a MIGRATIONS tuple (status + listing_state, checked_at,
+  description). New columns are nullable ON PURPOSE — NULL means "never checked",
+  which a DEFAULT would erase. Verified 13->16 cols with 197 rows, 1 interested
+  status and 36 scores intact. checking.check_listings asks each supported ATS,
+  stores state + caches description via storage.record_listing_check (UPDATE, not
+  INSERT — feed-owned columns stay untouched); score/draft now read the cache and
+  only hit the network when it is empty. Result on real data: of 36 matching, 28
+  are on sources we cannot query, 3 live, 5 gone. report marks GONE only when we
+  actually asked. DEDUPE BREAKTHROUGH: "Aquatic" (0ebb6ea9) and "Aquatic Capital"
+  (bda8b046) are the SAME Greenhouse job (board aquaticcapitalmanagement, id
+  8489233002) reached via /board/jobs/id and /embed/job_app?for=&token= — so ATS
+  board+job-id extracted from the URL is a principled identity for dedupe, better
+  than fuzzy title matching (revisits the Kudu decision from slice 2).
+  Next: tests (STILL zero, ~500 lines now), then Phase 3.

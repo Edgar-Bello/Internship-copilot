@@ -6,9 +6,23 @@ from datetime import datetime, timezone
 DB_PATH = pathlib.Path("data/copilot.db")
 
 CREATE_SQL = """CREATE TABLE IF NOT EXISTS postings (
-source TEXT, source_id TEXT, company TEXT, title TEXT, url TEXT, locations TEXT, 
-season TEXT, sponsorship TEXT, active INTEGER, is_visible INTEGER, date_posted INTEGER, 
-first_seen TEXT, status TEXT NOT NULL DEFAULT 'new', PRIMARY KEY (source, source_id))"""
+source TEXT, source_id TEXT, company TEXT, title TEXT, url TEXT, locations TEXT,
+season TEXT, sponsorship TEXT, active INTEGER, is_visible INTEGER, date_posted INTEGER,
+first_seen TEXT, status TEXT NOT NULL DEFAULT 'new',
+listing_state TEXT, checked_at TEXT, description TEXT,
+PRIMARY KEY (source, source_id))"""
+
+# Columns added after the table already existed somewhere. Kept beside CREATE_SQL
+# so the two halves of every migration stay visible together: CREATE for fresh
+# databases, ALTER for ones already on disk.
+MIGRATIONS = (
+    ("status", "TEXT NOT NULL DEFAULT 'new'"),
+    # No defaults below on purpose: NULL means "never checked", which a default
+    # would silently erase into a claim we haven't earned.
+    ("listing_state", "TEXT"),
+    ("checked_at", "TEXT"),
+    ("description", "TEXT"),
+)
 
 INSERT_SQL = """INSERT INTO postings (
     source, source_id, company, title, url, locations,
@@ -26,15 +40,22 @@ def get_connection() -> sqlite3.Connection:
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row  # before any query, so helpers can use row["name"]
     connection.execute(CREATE_SQL)
-    _ensure_status_column(connection)
+    for column, ddl in MIGRATIONS:
+        _ensure_column(connection, "postings", column, ddl)
     connection.execute(CREATE_SCORES_SQL)
     return connection
 
-def _ensure_status_column(connection: sqlite3.Connection) -> None:
-    """Migrate databases created before the status column existed. Safe on every startup."""
-    columns = connection.execute("PRAGMA table_info(postings)").fetchall()
-    if not any(col["name"] == "status" for col in columns):
-        connection.execute("ALTER TABLE postings ADD COLUMN status TEXT NOT NULL DEFAULT 'new'")
+def _ensure_column(connection: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
+    """Add a column to an existing table if it is missing. Safe on every startup.
+
+    CREATE TABLE IF NOT EXISTS never alters a table that already exists, so a
+    schema that grew after a database was created needs this second path.
+    """
+    # Table/column names cannot be ? placeholders, and these are our own literals,
+    # never user input - the parameterization rule still holds for values.
+    columns = connection.execute(f"PRAGMA table_info({table})").fetchall()
+    if not any(col["name"] == column for col in columns):
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
 
 
 def set_status(conn, source_id_prefix: str, status: str) -> int:
@@ -79,6 +100,20 @@ def ingest(conn: sqlite3.Connection, source_name: str, postings: list[dict]) -> 
 
     conn.commit()
     return new
+
+def record_listing_check(conn, source, source_id, state, description=None) -> None:
+    """Record whether the employer's board still lists this posting, and cache its text.
+
+    UPDATE, not INSERT: the posting row already exists and only these three
+    columns are ours to touch. Feed-owned columns stay untouched by design.
+    """
+    conn.execute(
+        "UPDATE postings SET listing_state = ?, checked_at = ?, description = ? "
+        "WHERE source = ? AND source_id = ?",
+        (state, datetime.now(timezone.utc).isoformat(), description, source, source_id),
+    )
+    conn.commit()
+
 
 def insert_score(conn, source, source_id, assessment, model, replace=False):
     """Store one score.
