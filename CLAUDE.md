@@ -157,3 +157,15 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   for "U.S. Person status is required", which is stated plainly in its
   description. One `score --force` run then fixes both stale-resume and
   metadata-only scoring. After that: tests, then Phase 3.
+- 2026-07-21 (session 6, cont.2): descriptions wired into scoring; full
+  `score --force` run done (36 rescored: 3 with real descriptions, 28 metadata
+  only, 5 DELISTED?). Prompt now splits SCORING_WITH_/WITHOUT_DESCRIPTION;
+  with a description, red_flags quote stated requirements. Anduril now flags
+  "U.S. Person status is required", "must be returning to school", and the real
+  timing: "reviewing applications in August 2026" — a live deadline metadata
+  never showed. KEY MEASUREMENT: the three byte-identical Kudu postings scored
+  3, 4, 4 — model variance is +/-1 tier on identical input. So a 3-vs-4 gap is
+  noise; only wide gaps mean anything, and red_flags/rationale are more stable
+  and more useful than the number (Apple Masters moved 2->3 but kept its
+  "targets Masters, resume is BS 2028" flag). This vindicates the 1-5 tier
+  ballot over 0-100. Next: tests (still zero), then Phase 3.

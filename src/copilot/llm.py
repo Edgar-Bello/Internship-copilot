@@ -12,11 +12,26 @@ class FitAssessment(BaseModel):
     red_flags: list[str]
 
 SCORING_INSTRUCTIONS = """You assess how well a CS student's resume fits an internship posting.
-Score 1-5 (5 = exceptional fit). You see only posting METADATA (title, company,
-locations, sponsorship) — there is NO job description, so do not invent one.
-Base the score only on what is provided. In `emphasize`, name 2-4 items from
-the RESUME this posting most wants to hear about. In `red_flags`, list only
-constraints visible in the metadata (e.g. no-sponsorship); empty list if none."""
+Score 1-5 (5 = exceptional fit). In `emphasize`, name 2-4 items from the RESUME
+this posting most wants to hear about. Invent nothing about the candidate or the
+role: judge only what you are given."""
+
+# Appended when we fetched the employer's own posting text.
+SCORING_WITH_DESCRIPTION = """
+A DESCRIPTION section follows: the employer's real posting text. Weigh the stated
+requirements and responsibilities against the resume, not just the job title.
+In `red_flags`, list constraints the DESCRIPTION states explicitly - citizenship
+or U.S. Person status, security clearance, required class year or graduation
+window, required degree level, on-site requirements, no-sponsorship language.
+Quote the constraint's own words briefly. Empty list only if there are none."""
+
+# Appended when no description could be fetched - keeps the model honest about it.
+SCORING_WITHOUT_DESCRIPTION = """
+You see ONLY posting METADATA (title, company, locations, sponsorship). There is
+NO job description, so do not invent requirements or responsibilities. Score
+conservatively: a generic title tells you little. In `red_flags`, list only what
+the metadata itself shows (e.g. no-sponsorship, single fixed location); empty
+list if none."""
 
 DRAFT_INSTRUCTIONS = """You draft a cover letter for a CS student applying to a tech internship.
 
@@ -78,16 +93,24 @@ def get_client() -> OpenAI:
     load_dotenv()  # copies .env entries into environment variables
     return OpenAI()  # reads OPENAI_API_KEY from the environment
 
-def score_posting(client: OpenAI, resume: str, posting) -> FitAssessment:
+def score_posting(
+    client: OpenAI, resume: str, posting, description: str | None = None
+) -> FitAssessment:
     posting_text = (
         f"Title: {posting['title']}\nCompany: {posting['company']}\n"
         f"Locations: {posting['locations']}\nSponsorship: {posting['sponsorship']}"
     )
+    user_content = f"RESUME:\n{resume}\n\nPOSTING:\n{posting_text}"
+    if description:
+        instructions = SCORING_INSTRUCTIONS + SCORING_WITH_DESCRIPTION
+        user_content += f"\n\nDESCRIPTION:\n{description}"
+    else:
+        instructions = SCORING_INSTRUCTIONS + SCORING_WITHOUT_DESCRIPTION
     response = client.responses.parse(
         model=MODEL,
         input=[
-            {"role": "system", "content": SCORING_INSTRUCTIONS},
-            {"role": "user", "content": f"RESUME:\n{resume}\n\nPOSTING:\n{posting_text}"},
+            {"role": "system", "content": instructions},
+            {"role": "user", "content": user_content},
         ],
         text_format=FitAssessment,
     )
