@@ -115,6 +115,24 @@ def record_listing_check(conn, source, source_id, state, description=None) -> No
     conn.commit()
 
 
+def set_description(conn, source_id_prefix: str, text: str) -> int:
+    """Store a description the human pasted in. Returns rows matched (1 = success).
+
+    Marks the listing live: you only get this text by finding the posting yourself.
+    Same single-match discipline as set_status - an ambiguous prefix changes nothing.
+    """
+    cursor = conn.execute(
+        "UPDATE postings SET description = ?, listing_state = 'live', checked_at = ? "
+        "WHERE source_id LIKE ?",
+        (text, datetime.now(timezone.utc).isoformat(), f"{source_id_prefix}%"),
+    )
+    if cursor.rowcount == 1:
+        conn.commit()
+    else:
+        conn.rollback()
+    return cursor.rowcount
+
+
 def insert_score(conn, source, source_id, assessment, model, replace=False):
     """Store one score.
 

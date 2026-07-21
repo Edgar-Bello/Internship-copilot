@@ -14,6 +14,14 @@ import requests
 
 TIMEOUT = 30
 
+# Some companies skin Greenhouse on their own domain, leaving only ?gh_jid=<id>
+# behind - the board name is nowhere in the URL. We guess it from the company
+# name; these are the ones the guess cannot reach. Add entries as you find them.
+GREENHOUSE_BOARD_OVERRIDES = {
+    "tower research": "towerresearchcapital",
+    "stoke space": "stokespacetechnologies",
+}
+
 
 def _strip_html(raw: str) -> str:
     """Greenhouse returns escaped HTML; the model wants prose."""
@@ -46,7 +54,32 @@ def _fetch_greenhouse(board: str, job_id: str) -> str | None:
     return _strip_html(content) if content else None
 
 
-def fetch_description(url: str) -> str | None:
+def _board_candidates(company: str, host: str) -> list[str]:
+    """Plausible Greenhouse board names, best guess first.
+
+    'Jump Trading Group' -> jumptradinggroup, jumptrading, jump (the middle one
+    is the real board). Dropping trailing words catches most corporate suffixes.
+    """
+    override = GREENHOUSE_BOARD_OVERRIDES.get(company.lower().strip())
+    candidates = [override] if override else []
+    words = re.findall(r"[a-z0-9]+", company.lower())
+    for stop in range(len(words), 0, -1):
+        candidates.append("".join(words[:stop]))
+    # The company's own domain is often the board name too: tower-research.com -> towerresearch
+    candidates.append(re.sub(r"[^a-z0-9]", "", host.lower().removeprefix("www.").split(".")[0]))
+    return list(dict.fromkeys(c for c in candidates if c))  # dedupe, keep order
+
+
+def _fetch_greenhouse_by_jid(job_id: str, company: str, host: str) -> str | None:
+    """Company-hosted Greenhouse page: we have the job id but must find the board."""
+    for board in _board_candidates(company, host):
+        description = _fetch_greenhouse(board, job_id)
+        if description:
+            return description
+    return None
+
+
+def fetch_description(url: str, company: str = "") -> str | None:
     """Real description text for a posting, or None if we can't get one."""
     parsed = urllib.parse.urlparse(url)
     parts = [p for p in parsed.path.split("/") if p]
@@ -60,6 +93,8 @@ def fetch_description(url: str) -> str | None:
                 return _fetch_greenhouse(query["for"][0], query["token"][0])
             if len(parts) >= 3 and parts[1] == "jobs":
                 return _fetch_greenhouse(parts[0], parts[2])
+        if "gh_jid" in query:
+            return _fetch_greenhouse_by_jid(query["gh_jid"][0], company, parsed.netloc)
     except requests.RequestException:
         return None  # a network hiccup degrades the draft, it does not crash it
     return None
@@ -67,5 +102,7 @@ def fetch_description(url: str) -> str | None:
 
 def supports(url: str) -> bool:
     """True when this URL is on an ATS we can query - distinguishes 'delisted' from 'unsupported'."""
-    netloc = urllib.parse.urlparse(url).netloc
-    return "ashbyhq.com" in netloc or "greenhouse.io" in netloc
+    parsed = urllib.parse.urlparse(url)
+    if "ashbyhq.com" in parsed.netloc or "greenhouse.io" in parsed.netloc:
+        return True
+    return "gh_jid" in urllib.parse.parse_qs(parsed.query)
