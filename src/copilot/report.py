@@ -38,6 +38,7 @@ def report(conn) -> None:
     rows = matching_postings(conn)
     for row in rows:
         first_location = json.loads(row["locations"])[0]
+        score = row["score"] if row["score"] is not None else "-"
         print(f"{row['source_id'][:8]} - {row['status']}")
-        print(f"{row['company']} - {row['title']} - {first_location}")
+        print(f"{row['company']} - {row['title']} - {first_location} - score: {score}")
     print(f"{len(rows)} matching Summer postings")
