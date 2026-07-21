@@ -1,6 +1,7 @@
 """Orchestrate scoring: matching postings + resume -> model -> scores table."""
 import pathlib
 
+from copilot.descriptions import fetch_description, supports
 from copilot.llm import MODEL, get_client, score_posting
 from copilot.report import matching_postings
 from copilot.storage import insert_score
@@ -27,7 +28,27 @@ def score_matching(conn, force: bool = False) -> None:
         print(f"{len(postings)} matching, {len(postings) - len(todo)} already scored, {len(todo)} to score")
 
     client = get_client()
+    grounded = delisted = 0
     for i, posting in enumerate(todo, start=1):
-        assessment = score_posting(client, resume, posting)
+        # A real description turns "guess from the title" into "read the requirements".
+        description = fetch_description(posting["url"])
+        if description:
+            grounded += 1
+            marker = "desc"
+        elif supports(posting["url"]):
+            delisted += 1
+            marker = "DELISTED?"
+        else:
+            marker = "meta"
+        assessment = score_posting(client, resume, posting, description)
         insert_score(conn, posting["source"], posting["source_id"], assessment, MODEL, replace=force)
-        print(f"[{i}/{len(todo)}] {posting['company']} - {posting['title']} -> {assessment.score}")
+        print(
+            f"[{i}/{len(todo)}] {posting['company']} - {posting['title']} "
+            f"-> {assessment.score} ({marker})"
+        )
+
+    print(
+        f"\nscored {len(todo)}: {grounded} from the employer's description, "
+        f"{len(todo) - grounded - delisted} from metadata only, "
+        f"{delisted} whose ATS no longer lists them"
+    )
