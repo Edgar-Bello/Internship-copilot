@@ -4,10 +4,12 @@ Usage:
   .venv\\Scripts\\python.exe -m copilot                          fetch + store, show new Summer postings
   .venv\\Scripts\\python.exe -m copilot report                   show stored postings matching profile.toml
   .venv\\Scripts\\python.exe -m copilot mark <id-prefix> <status>  set a posting's status
-  .venv\\Scripts\\python.exe -m copilot score                    score unscored matching postings
+  .venv\\Scripts\\python.exe -m copilot score [--force]          score matching postings (--force rescores all)
+  .venv\\Scripts\\python.exe -m copilot draft <id-prefix> [--force]  write a cover letter draft to drafts/
 """
 import sys
 
+from copilot.draft import draft
 from copilot.report import report
 from copilot.scoring import score_matching
 from copilot.sources import SOURCE_NAME, fetch_listings, summer_postings
@@ -32,7 +34,12 @@ if __name__ == "__main__":
         else:
             print(f"{changed} postings match {prefix!r} - nothing changed, use a longer prefix")
     elif len(sys.argv) > 1 and sys.argv[1] == "score":
-        score_matching(get_connection())
+        score_matching(get_connection(), force="--force" in sys.argv)
+    elif len(sys.argv) > 1 and sys.argv[1] == "draft":
+        if len(sys.argv) < 3:
+            print("usage: python -m copilot draft <id-prefix> [--force]")
+            sys.exit(1)
+        draft(get_connection(), sys.argv[2], force="--force" in sys.argv)
     else:
         listings = fetch_listings()
         conn = get_connection()
