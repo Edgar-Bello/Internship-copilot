@@ -50,7 +50,7 @@ def draft(conn, id_prefix: str, force: bool = False) -> None:
     resume = RESUME_PATH.read_text(encoding="utf-8")
     emphasize = json.loads(posting['emphasize']) if posting['emphasize'] else []
 
-    description = fetch_description(posting["url"])
+    description = posting["description"] or fetch_description(posting["url"])
     if description:
         print(f"Fetched the employer's description ({len(description)} chars) - "
               "the draft will include a grounded 'why this role' paragraph.")

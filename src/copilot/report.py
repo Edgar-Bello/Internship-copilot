@@ -39,6 +39,8 @@ def report(conn) -> None:
     for row in rows:
         first_location = json.loads(row["locations"])[0]
         score = row["score"] if row["score"] is not None else "-"
-        print(f"{row['source_id'][:8]} - {row['status']}")
+        # "GONE" only when we actually asked and were told no; never-checked stays quiet.
+        listing = " GONE" if row["listing_state"] == "gone" else ""
+        print(f"{row['source_id'][:8]} - {row['status']}{listing}")
         print(f"{row['company']} - {row['title']} - {first_location} - score: {score}")
     print(f"{len(rows)} matching Summer postings")

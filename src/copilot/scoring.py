@@ -31,7 +31,8 @@ def score_matching(conn, force: bool = False) -> None:
     grounded = delisted = 0
     for i, posting in enumerate(todo, start=1):
         # A real description turns "guess from the title" into "read the requirements".
-        description = fetch_description(posting["url"])
+        # Prefer the cached one `check` stored; only go to the network if absent.
+        description = posting["description"] or fetch_description(posting["url"])
         if description:
             grounded += 1
             marker = "desc"
