@@ -27,7 +27,7 @@ def check_listings(conn, recheck: bool = False) -> None:
 
     live = gone = 0
     for i, posting in enumerate(todo, start=1):
-        description = fetch_description(posting["url"])
+        description = fetch_description(posting["url"], posting["company"])
         state = "live" if description else "gone"
         if description:
             live += 1

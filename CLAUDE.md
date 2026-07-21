@@ -185,3 +185,24 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   board+job-id extracted from the URL is a principled identity for dedupe, better
   than fuzzy title matching (revisits the Kudu decision from slice 2).
   Next: tests (STILL zero, ~500 lines now), then Phase 3.
+- 2026-07-21 (session 6, cont.4): description coverage + apply URL in drafts.
+  RESEARCH (verify-before-building): plain page fetch is a dead end — Citadel
+  returns a Cloudflare "Just a moment..." interstitial, and defeating that is
+  exactly what the CAPTCHA/bot rule forbids; Workday JSON is 404/403 (not
+  public); Apple's job API is gone. So NO generic scraping — rules unchanged.
+  What DOES work: company career pages that carry ?gh_jid= are Greenhouse
+  underneath. descriptions.py now follows gh_jid, guessing the board from the
+  company name (progressive word-prefixes + domain) with a small
+  GREENHOUSE_BOARD_OVERRIDES dict for the ones guessing misses (tower research
+  -> towerresearchcapital, stoke space -> stokespacetechnologies). Checkable
+  went 8 -> 12, live 3 -> 7. Plus `describe <id-prefix> [--file F]`: paste a
+  description yourself (stdin or file) — covers 100% of postings, uses the
+  "links Edgar explicitly provides" rule, no circumvention. Demoed on Amazon
+  (3afa0d8c): stored 3321 chars, redrafted, and the letter now cites what the
+  posting actually emphasizes. Drafts open with a header block: Apply URL,
+  location, fit score, sponsorship, red_flags as a pre-send checklist, a GONE
+  warning, and an explicit TODO when no description existed.
+  KNOWN GAP: `score` skips already-scored postings, so the 7 newly-live
+  descriptions will not be used until `score --force`. Better fix later:
+  rescore when checked_at is newer than scored_at (same shape as the
+  resume-fingerprint idea). Next: tests, then Phase 3.
