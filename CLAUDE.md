@@ -306,3 +306,21 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   Next: Edgar sets degree = "Bachelor's Degree", reruns, confirms resume upload.
   Then TESTS — _normalize and the single-candidate rule now decide what lands on
   a real application, and the only thing checking them is a hand-run probe.
+- 2026-07-22 (session 7, cont.5): model-assisted option matching, on request.
+  Edgar wanted the tool to bridge his wording and the employer's "not to the
+  point where it lies". Layered: _try_exact (words, no interpretation) runs
+  first; only on failure does _list_all_options + llm.match_option show the model
+  the employer's REAL list and ask which option means the same fact. The model
+  may answer only with a string that is on that list (validated after parsing —
+  a hallucinated option is discarded) or null. Filled entries are annotated
+  "(matched from 'X')" so an interpreted answer is never mistaken for an exact
+  one. NOT used for self-identification: those lists are short and legally
+  meaningful, so _is_self_id() withholds the client and exact matching stands.
+  NEVER_FILL fields never reach the model at all.
+  VERIFIED headless on the live Anduril form: 11/11 fields fill, "Bachelor of
+  Science" -> "Bachelor's Degree", "BS" -> "Bachelor's Degree"; and refusals
+  hold — Hogwarts, "Nanodegree in Vibes", "Underwater Basket Weaving" all
+  return False and leave the field blank with the employer's options listed.
+  Costs one small API call per unmatched combobox, none when wording already
+  agrees. Edgar's earlier School failure was pre-cascade-fix; it fills now.
+  Next: Edgar reruns `apply` (resume upload STILL unverified), then TESTS.
