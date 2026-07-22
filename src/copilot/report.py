@@ -6,7 +6,7 @@ from copilot.descriptions import ats_key
 
 PROFILE_PATH = pathlib.Path("profile.toml")
 
-SELECT_SUMMER_SQL = """SELECT p.*, s.score, s.rationale, s.emphasize
+SELECT_SUMMER_SQL = """SELECT p.*, s.score, s.rationale, s.emphasize, s.red_flags
 FROM postings p
 LEFT JOIN scores s ON s.source = p.source AND s.source_id = p.source_id
 WHERE p.season = 'Summer' AND p.active = 1 AND p.is_visible = 1
@@ -86,6 +86,25 @@ def _matching_raw(conn, include_closed: bool = False) -> tuple[list, int]:
             continue
         result.append(row)
     return result, hidden
+
+def score_report(conn) -> None:
+    """The ranked shortlist with the reasoning attached: what is left to apply to.
+
+    Same filtering as `report`, minus the ones already applied to - this answers
+    "what should I do next", not "what happened to everything".
+    """
+    rows = [row for row in matching_postings(conn) if row["status"] != "applied"]
+    for row in rows:
+        score = row["score"] if row["score"] is not None else "-"
+        print(f"\n[{score}] {row['source_id'][:8]}  {row['company']} - {row['title']}")
+        print(f"      {row['status']} | {json.loads(row['locations'])[0]} | {row['url']}")
+        for flag in json.loads(row["red_flags"]) if row["red_flags"] else []:
+            print(f"      ! {flag}")
+        if row["rationale"]:
+            print(f"      {row['rationale']}")
+    scored = sum(1 for row in rows if row["score"] is not None)
+    print(f"\n{len(rows)} still to apply to ({scored} scored)")
+
 
 def report(conn, include_closed: bool = False) -> None:
     rows, collapsed, hidden = matching_with_duplicates(conn, include_closed)

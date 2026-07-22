@@ -37,6 +37,22 @@ CREATE_SCORES_SQL = """CREATE TABLE IF NOT EXISTS scores (
 # "rejected", which is theirs about you. Both drop off the to-do list.
 ALLOWED_STATUSES = ("new", "seen", "interested", "applied", "rejected", "closed")
 
+# A convenience for reading the database by hand: live, unapplied postings with
+# their score beside them, instead of joining two tables every time.
+# Recreated on every startup - a view stores no data, so unlike a table it can
+# simply be replaced when its definition changes.
+# NOT authoritative: duplicate listings are folded by ats_key in Python, which
+# SQL here cannot do, so this shows one extra row per duplicated job. Use
+# `python -m copilot shortlist` for the real list.
+TODO_SCORES_VIEW = """CREATE VIEW todo_scores AS
+SELECT substr(p.source_id, 1, 8) AS id, s.score, p.company, p.title, p.status,
+       p.sponsorship, s.red_flags, s.rationale, p.url
+FROM postings p
+JOIN scores s ON s.source = p.source AND s.source_id = p.source_id
+WHERE p.status NOT IN ('applied', 'closed', 'rejected')
+  AND (p.listing_state IS NULL OR p.listing_state != 'gone')
+ORDER BY s.score DESC, p.date_posted DESC"""
+
 def get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(exist_ok=True)
     connection = sqlite3.connect(DB_PATH)
@@ -45,6 +61,8 @@ def get_connection() -> sqlite3.Connection:
     for column, ddl in MIGRATIONS:
         _ensure_column(connection, "postings", column, ddl)
     connection.execute(CREATE_SCORES_SQL)
+    connection.execute("DROP VIEW IF EXISTS todo_scores")
+    connection.execute(TODO_SCORES_VIEW)
     return connection
 
 def _ensure_column(connection: sqlite3.Connection, table: str, column: str, ddl: str) -> None:

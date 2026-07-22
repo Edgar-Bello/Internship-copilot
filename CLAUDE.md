@@ -400,3 +400,18 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   include_closed=True so `check --recheck` can still reach delisted rows.
   Live result: 35 -> 30 shown, 5 hidden. Next open items unchanged: score
   staleness, more sources, mojibake, argparse.
+- 2026-07-22 (session 7, cont.10): `shortlist` command + todo_scores view.
+  Edgar could not read the scoring output: score/rationale/red_flags live in
+  `scores` while company/title live in `postings`, so every question needed a
+  join. `shortlist` prints one block per posting (score, id, company, title,
+  status, location, url, red flags as "!" lines, rationale), reusing
+  matching_postings so it inherits keyword filtering, ATS dedupe and the
+  closed/gone hiding, then drops status == "applied" — it answers "what is
+  left", not "what happened". SELECT_SUMMER_SQL gained s.red_flags.
+  Also a todo_scores VIEW in the db for browsing by hand (DROP + CREATE every
+  startup: a view holds no data, so unlike a table it can just be replaced —
+  worth contrasting with the CREATE TABLE IF NOT EXISTS trap). The view is NOT
+  authoritative: SQL cannot run the ats_key dedupe, so it shows 31 where
+  shortlist shows 30 (Aquatic twice). Documented in place.
+  Mojibake is now clearly visible in shortlist output (Anduril's rationale) —
+  it is stored mangled, so fixing it needs a rescore after fixing encoding.
