@@ -466,3 +466,22 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   offers "No, I do not have a disability and have not had one in the past" and
   "I do not want to answer" — self-ID never uses the model, so wording must be
   theirs. The failure message now prints their options.
+- 2026-07-22 (session 7, cont.14): SECOND SOURCE added; 90 tests.
+  Research first: most 2027 lists are markdown only (speedyapply 8.4k stars,
+  sndsh404 733 — both would need README table parsing). The one with structured
+  data is zshah101/Automated-List-Of-Summer-2027-and-Fall-2026-Tech-Internships
+  (data/jobs.json, updated daily, keyed by "ats:board:job_id" — the same
+  identity idea as our ats_key).
+  sources.py restructured around a frozen Source(name, url, normalize) record;
+  normalize is the ONLY place a feed's vocabulary may exist, and fetch() copes
+  with a top-level list or a dict keyed by id. Refactor committed alone and
+  verified behaviour-identical (197 rows, 0 new).
+  zshah101's three silent traps, each now covered by a test: season is
+  "Summer 2027" not "Summer" (an untranslated compare is legal and always False
+  — the whole list would vanish); is_open is the STRING "True"/"False" and
+  bool("False") is True (every closed posting would come back); location is one
+  semicolon-joined string, not a list. Also posted_at is ISO text -> unix.
+  RESULT: 197 -> 394 stored, report 26 -> 59 matching, and cross-list duplicates
+  fold automatically (hidden duplicates went 1 -> 3) because ats_key already
+  proves identity across sources. 35 of the 59 are unscored — next run of
+  `score` picks them up.

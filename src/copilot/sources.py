@@ -13,6 +13,7 @@ two lists can reuse an id without colliding.
 """
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 
 import requests
 
@@ -44,11 +45,57 @@ def _from_vanshb03(row: dict) -> dict | None:
     }
 
 
+def _from_zshah101(row: dict) -> dict | None:
+    """Translate the zshah101 list, which disagrees with us on almost everything.
+
+    Three traps, each of which fails silently if ignored:
+      - `season` is "Summer 2027", not "Summer". Comparing those is legal Python
+        that is always False, so the whole list would just vanish.
+      - `is_open` is the STRING "True"/"False". bool("False") is True, which
+        would resurrect every closed posting.
+      - `location` is one semicolon-joined string, not a list.
+    """
+    job_id = row.get("id")
+    if not job_id:
+        return None
+    # This list covers several seasons; ours means Summer 2027 by "Summer",
+    # because it grew up around a repo that only carried that one year.
+    season = row.get("season", "")
+    return {
+        "id": job_id,
+        "company_name": row.get("company", ""),
+        "title": row.get("title", ""),
+        "url": row.get("url", ""),
+        "locations": [part.strip() for part in row.get("location", "").split(";") if part.strip()],
+        "season": "Summer" if season == "Summer 2027" else season,
+        "sponsorship": row.get("sponsorship", ""),
+        "active": str(row.get("is_open", "")).strip().lower() == "true",
+        "is_visible": True,  # no such concept here: if it is in the file, it is listed
+        "date_posted": _unix_seconds(row.get("posted_at")),
+    }
+
+
+def _unix_seconds(timestamp: str | None) -> int:
+    """ISO 8601 text -> unix seconds, which is what our column holds."""
+    if not timestamp:
+        return 0
+    try:
+        return int(datetime.fromisoformat(timestamp).timestamp())
+    except ValueError:
+        return 0
+
+
 SOURCES = (
     Source(
         name="vanshb03",
         url="https://raw.githubusercontent.com/vanshb03/Summer2027-Internships/dev/.github/scripts/listings.json",
         normalize=_from_vanshb03,
+    ),
+    Source(
+        name="zshah101",
+        url="https://raw.githubusercontent.com/zshah101/"
+            "Automated-List-Of-Summer-2027-and-Fall-2026-Tech-Internships/main/data/jobs.json",
+        normalize=_from_zshah101,
     ),
 )
 
