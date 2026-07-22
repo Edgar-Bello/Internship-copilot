@@ -14,6 +14,10 @@ data/
 #Resume in plain text format, not markdown
 resume.md
 
+# Real personal details for form pre-fill. identity.example.toml IS committed
+# as the template; this one never is.
+identity.toml
+
 drafts/
 
 # Tool caches and build artifacts

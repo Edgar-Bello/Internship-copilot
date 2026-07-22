@@ -206,3 +206,22 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   descriptions will not be used until `score --force`. Better fix later:
   rescore when checked_at is newer than scored_at (same shape as the
   resume-fingerprint idea). Next: tests, then Phase 3.
+- 2026-07-22 (session 7): PHASE 3 STARTED (tests still deferred by Edgar's call).
+  Scare check first: three commits titled "Git ignore test"/"Include sensitive
+  information" turned out to touch ONLY .gitignore and net to zero; verified no
+  .env/resume/drafts/data ever committed, no key-shaped strings in any commit,
+  14 files total in history. Edgar then rewrote history to drop them; local and
+  origin now agree at 4d6fb10. Playwright + chromium installed (approved);
+  pydantic + playwright declared in pyproject. identity.toml (gitignored) holds
+  personal form-fill data, identity.example.toml committed as the template —
+  profile.toml could not hold it because that file IS committed to a public repo.
+  applying.py slice 1: `apply <id-prefix>` prints a briefing (URL, score,
+  status, sponsorship, red_flags checklist, GONE warning, draft path) then opens
+  the posting in a HEADED chromium and blocks until Enter. Never submits, never
+  logs in, never touches a bot check — if one appears the human takes over.
+  ENVIRONMENT NOTE: headless=True works in Claude's shell but headless=False
+  fails there with "spawn UNKNOWN" (no interactive desktop session), so the
+  headed path can only be verified by Edgar on his own terminal; a friendly
+  fallback prints the URL instead of a traceback. Next: Edgar runs `apply`
+  himself, then slice 2 — pre-fill Greenhouse/Ashby fields from identity.toml,
+  stopping before submit. Workday/Amazon need accounts, so they stay open-only.
