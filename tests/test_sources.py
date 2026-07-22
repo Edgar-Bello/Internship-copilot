@@ -1,6 +1,81 @@
-"""The feed filter and the draft filename builder - the two smallest pure functions."""
+"""Feed filtering, per-source translation, and the draft filename builder."""
+from datetime import datetime
+
 from copilot.draft import _slug
-from copilot.sources import summer_postings
+from copilot.sources import SOURCES, _from_vanshb03, _from_zshah101, summer_postings
+
+# A real row from zshah101's jobs.json, trimmed.
+ZSHAH_ROW = {
+    "id": "greenhouse:andurilindustries:5148079007",
+    "company": "Anduril",
+    "title": "2027 Software Engineer Intern",
+    "url": "https://boards.greenhouse.io/andurilindustries/jobs/5148079007",
+    "location": "Atlanta, Georgia, United States; Boston, Massachusetts, United States;",
+    "season": "Summer 2027",
+    "is_open": "True",
+    "sponsorship": "citizens-only",
+    "posted_at": "2026-06-10T19:33:06-04:00",
+}
+
+
+class TestZshah101Normalizer:
+    """Each case here is a silent failure if the translation is skipped."""
+
+    def test_season_is_translated_into_our_vocabulary(self):
+        # "Summer 2027" == "Summer" is legal and always False, so an untranslated
+        # season would make the entire list disappear with no error.
+        assert _from_zshah101(ZSHAH_ROW)["season"] == "Summer"
+        assert summer_postings([_from_zshah101(ZSHAH_ROW)]) != []
+
+    def test_other_seasons_are_left_alone_and_filtered_out(self):
+        for season in ("Fall 2026", "Summer 2026"):
+            row = _from_zshah101(ZSHAH_ROW | {"season": season})
+            assert row["season"] == season
+            assert summer_postings([row]) == []
+
+    def test_is_open_is_a_string_not_a_boolean(self):
+        # bool("False") is True - taking this field at face value would
+        # resurrect every closed posting on the list.
+        assert _from_zshah101(ZSHAH_ROW | {"is_open": "False"})["active"] is False
+        assert _from_zshah101(ZSHAH_ROW | {"is_open": "True"})["active"] is True
+
+    def test_closed_postings_never_reach_the_summer_list(self):
+        assert summer_postings([_from_zshah101(ZSHAH_ROW | {"is_open": "False"})]) == []
+
+    def test_locations_are_split_out_of_one_string(self):
+        assert _from_zshah101(ZSHAH_ROW)["locations"] == [
+            "Atlanta, Georgia, United States", "Boston, Massachusetts, United States",
+        ]
+
+    def test_a_missing_location_is_an_empty_list_not_a_crash(self):
+        assert _from_zshah101(ZSHAH_ROW | {"location": ""})["locations"] == []
+
+    def test_posted_at_becomes_unix_seconds(self):
+        # 2026-06-10T19:33:06-04:00 -> an int the report can ORDER BY.
+        posted = _from_zshah101(ZSHAH_ROW)["date_posted"]
+        assert isinstance(posted, int)
+        assert posted == int(datetime.fromisoformat("2026-06-10T19:33:06-04:00").timestamp())
+
+    def test_unparseable_dates_do_not_crash_the_run(self):
+        assert _from_zshah101(ZSHAH_ROW | {"posted_at": "not a date"})["date_posted"] == 0
+        assert _from_zshah101(ZSHAH_ROW | {"posted_at": None})["date_posted"] == 0
+
+    def test_rows_without_an_id_are_dropped(self):
+        assert _from_zshah101(ZSHAH_ROW | {"id": ""}) is None
+
+    def test_output_matches_the_shape_the_other_source_produces(self):
+        theirs = _from_zshah101(ZSHAH_ROW)
+        ours = _from_vanshb03({
+            "id": "x", "company_name": "C", "title": "T", "url": "u", "locations": [],
+            "season": "Summer", "sponsorship": "Other", "active": True,
+            "is_visible": True, "date_posted": 1,
+        })
+        assert theirs.keys() == ours.keys()
+
+
+def test_source_names_are_unique_because_they_namespace_ids():
+    names = [source.name for source in SOURCES]
+    assert len(names) == len(set(names))
 
 
 def posting(**overrides):
