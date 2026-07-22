@@ -225,3 +225,22 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   fallback prints the URL instead of a traceback. Next: Edgar runs `apply`
   himself, then slice 2 — pre-fill Greenhouse/Ashby fields from identity.toml,
   stopping before submit. Workday/Amazon need accounts, so they stay open-only.
+- 2026-07-22 (session 7, cont.): slice 1 CONFIRMED working on Edgar's terminal
+  after he ran `playwright install chromium` himself — Claude's earlier install
+  had landed in a sandbox overlay (file existed for Claude, not for Edgar), a
+  second environment mismatch after the missing desktop session. Lesson stands:
+  Claude cannot verify the headed browser path at all; Edgar runs it.
+  SLICE 2 BUILT (unverified in a real browser): prefill() types identity.toml
+  values into labelled text inputs. Design comes from INSPECTING Anduril's real
+  Greenhouse form, not from guessing: (a) question ids are per-posting
+  (question_12114509007 = LinkedIn only at Anduril), so matching is on LABEL
+  TEXT via FILL_RULES; (b) the form carries a g-recaptcha-response field, so the
+  tool structurally cannot submit — the hard stop is the only possible design;
+  (c) NEVER_FILL blocks legal declarations (work authorization, export control,
+  sponsorship, "will you return to school") and protected characteristics
+  (gender, ethnicity, veteran, disability) — a wrong guess there is a false
+  statement on an application. Verified offline against the 24 real Anduril
+  labels: 10 filled, 14 correctly skipped. KNOWN RISK: school/degree/discipline
+  look like comboboxes (each has an adjacent empty-id required input), so fill()
+  may type text without registering a selection — Edgar must check visually.
+  Next: Edgar runs `apply` on Anduril, reports which fields actually took.
