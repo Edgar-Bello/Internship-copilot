@@ -100,6 +100,33 @@ def fetch_description(url: str, company: str = "") -> str | None:
     return None
 
 
+def ats_key(url: str) -> str | None:
+    """Identity of the underlying job at the ATS, or None if we cannot read one.
+
+    Two feed rows with the same key are the same job reached by different URLs -
+    "Aquatic" and "Aquatic Capital" are both Greenhouse job 8489233002, one via
+    /board/jobs/id and one via /embed/job_app. Greenhouse and Ashby job ids are
+    globally unique, so the board name is deliberately not part of the key.
+
+    None means "we cannot prove these are the same job", which is the answer for
+    the three Kudu Dynamics postings: separate Workday requisitions, separate
+    jobs, and merging them would cost a real application.
+    """
+    parsed = urllib.parse.urlparse(url)
+    parts = [p for p in parsed.path.split("/") if p]
+    query = urllib.parse.parse_qs(parsed.query)
+    if "ashbyhq.com" in parsed.netloc and len(parts) >= 2:
+        return f"ashby:{parts[1]}"
+    if "gh_jid" in query:
+        return f"greenhouse:{query['gh_jid'][0]}"
+    if "greenhouse.io" in parsed.netloc:
+        if parts[:2] == ["embed", "job_app"] and "token" in query:
+            return f"greenhouse:{query['token'][0]}"
+        if len(parts) >= 3 and parts[1] == "jobs":
+            return f"greenhouse:{parts[2]}"
+    return None
+
+
 def supports(url: str) -> bool:
     """True when this URL is on an ATS we can query - distinguishes 'delisted' from 'unsupported'."""
     parsed = urllib.parse.urlparse(url)

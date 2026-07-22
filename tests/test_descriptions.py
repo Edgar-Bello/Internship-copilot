@@ -4,9 +4,16 @@ These break silently in the wild: a vendor changes a path shape and every
 posting quietly reports DELISTED. Real URLs from the database are used below so
 the failure is loud and local instead.
 """
-from copilot.descriptions import GREENHOUSE_BOARD_OVERRIDES, _board_candidates, _strip_html, supports
+from copilot.descriptions import (
+    GREENHOUSE_BOARD_OVERRIDES,
+    _board_candidates,
+    _strip_html,
+    ats_key,
+    supports,
+)
 
 GREENHOUSE_DIRECT = "https://job-boards.greenhouse.io/andurilindustries/jobs/5148079007"
+GREENHOUSE_DIRECT_AQUATIC = "https://job-boards.greenhouse.io/aquaticcapitalmanagement/jobs/8489233002"
 GREENHOUSE_EU = "https://job-boards.eu.greenhouse.io/veeamsoftware/jobs/4857832101"
 GREENHOUSE_EMBED = ("https://job-boards.greenhouse.io/embed/job_app"
                     "?for=aquaticcapitalmanagement&jr_id=6a06fd77&token=8489233002")
@@ -57,6 +64,37 @@ class TestBoardCandidates:
 
     def test_never_yields_an_empty_board_name(self):
         assert "" not in _board_candidates("!!!", "example.com")
+
+
+class TestAtsKey:
+    """Identity of the job at the employer's ATS, used to fold duplicate listings."""
+
+    def test_the_aquatic_case_two_urls_one_greenhouse_job(self):
+        # The real pair that started this: same job id, two URL shapes, two feed rows.
+        assert ats_key(GREENHOUSE_DIRECT_AQUATIC) == ats_key(GREENHOUSE_EMBED)
+
+    def test_a_company_hosted_page_matches_its_greenhouse_original(self):
+        assert ats_key(COMPANY_SITE_GH_JID) == "greenhouse:8003019"
+        assert ats_key("https://job-boards.greenhouse.io/jumptrading/jobs/8003019") == \
+               "greenhouse:8003019"
+
+    def test_the_board_name_is_not_part_of_the_key(self):
+        # Greenhouse job ids are globally unique, and the same job is reachable
+        # under more than one board path.
+        assert ats_key(GREENHOUSE_DIRECT) == "greenhouse:5148079007"
+        assert ats_key(GREENHOUSE_EU) == "greenhouse:4857832101"
+
+    def test_ashby_keys_on_the_posting_uuid(self):
+        assert ats_key(ASHBY) == "ashby:6dcb712c-8fe5-4725-ad6a-0e9771af22cb"
+
+    def test_different_jobs_never_collide(self):
+        assert ats_key(GREENHOUSE_DIRECT) != ats_key(GREENHOUSE_EU)
+
+    def test_unreadable_urls_return_none_so_nothing_is_merged(self):
+        # The three Kudu Dynamics postings live here: separate Workday
+        # requisitions, genuinely separate jobs, must never be folded together.
+        for url in (WORKDAY, AMAZON, "https://www.workatastartup.com/jobs/94400"):
+            assert ats_key(url) is None, url
 
 
 class TestStripHtml:

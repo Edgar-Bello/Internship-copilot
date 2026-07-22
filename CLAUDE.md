@@ -344,3 +344,20 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   Storage tests use a tmp_path DB via monkeypatch on storage.DB_PATH; nothing
   touches data/. Next: Edgar's call — more sources, dedupe by ATS job id
   (Aquatic case), or the score-staleness fix (checked_at newer than scored_at).
+- 2026-07-22 (session 7, cont.7): DEDUPE BY ATS JOB ID done (71 tests now).
+  descriptions.ats_key(url) returns "greenhouse:<job_id>" or "ashby:<uuid>",
+  covering all four URL shapes (/board/jobs/id, /embed/job_app?token=,
+  ?gh_jid=, ashby /org/uuid). The board name is deliberately NOT in the key:
+  Greenhouse job ids are globally unique and the same job appears under more
+  than one board path. None means "cannot prove identity" — never merged.
+  report.dedupe_by_ats folds only exact-key matches and keeps the richest row
+  (has description > has score > first seen), preserving order. Wired into
+  matching_postings so report, score and check all see one row per real job;
+  matching_with_duplicates() also returns the collapsed count, which report
+  prints. RESULT on live data: 36 -> 35, the Aquatic/Aquatic Capital pair
+  folded into the row that has the description, and the three Kudu Dynamics
+  Workday requisitions all survived (key=None) — which is the whole point:
+  this merges on proof, not resemblance, reversing nothing from the slice-2
+  no-auto-merge decision. Phase 1-3 all complete; Edgar starts applying.
+  Remaining known gaps: score staleness (checked_at newer than scored_at),
+  more sources, mojibake in stored rationales, __main__ if/elif wants argparse.
