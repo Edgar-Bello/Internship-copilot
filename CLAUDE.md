@@ -415,3 +415,20 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   shortlist shows 30 (Aquatic twice). Documented in place.
   Mojibake is now clearly visible in shortlist output (Anduril's rationale) —
   it is stored mangled, so fixing it needs a rescore after fixing encoding.
+- 2026-07-22 (session 7, cont.11): NEWSLETTER BUG — the worst prefill failure so
+  far. `apply 31531dfb` (Stoke Space) typed Edgar's email into a Mailchimp
+  "Get updates" box. Cause: the Greenhouse URL we resolve to REDIRECTS back to
+  stokespace.com/careers/current-openings/, which has no application form at
+  all; its only label[for] is mce-EMAIL. prefill had no notion of "is this even
+  an application?" and filled the one field it recognised.
+  Fix: looks_like_application_form(page) gates prefill — a real application asks
+  for a name or a resume, a subscribe box asks for neither. Returns ([], []) so
+  apply falls through to _follow_apply_link, and if that also finds nothing it
+  says nothing was typed and prints the exact `mark <id> closed` command.
+  Verified: Stoke Space 0 filled (was 1, wrongly), Anduril unaffected.
+  NOTE: `check` calls Stoke Space "live" because the Greenhouse API still has
+  the job while the board page redirects away — API and page disagree.
+  Also added `shortlist --check`, which reruns check_listings(recheck=True)
+  before listing (wired in __main__, not report, to avoid a circular import).
+  CONFIRMED shortlist was already dropping closed/rejected/gone: on live data
+  36 matching -> 26 shown, with 4 that Edgar had marked closed and 5 delisted.
