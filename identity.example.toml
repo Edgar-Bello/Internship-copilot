@@ -29,5 +29,23 @@ graduation_month = "May"
 graduation_year = "2028"
 
 [files]
-# Path to the PDF you actually attach. Keep it outside the repo, or gitignored.
+# The PDF the tool attaches to the resume field. Keep it gitignored.
+# It never attaches a cover letter: your draft is unreviewed until you edit it.
 resume_pdf = "C:/Users/you/Documents/resume.pdf"
+
+# Voluntary self-identification (EEO). Entirely optional — leave any of these
+# blank and the tool leaves that question for you to answer on the form.
+#
+# These are only ever typed if the exact option exists on that employer's form.
+# No near-matches, no substitutions: if your wording is not one of their
+# choices, the field is left empty and the tool tells you so.
+#
+# Note what is NOT here: work authorization, sponsorship, and export-control
+# questions stay manual forever. Those invert between employers ("Are you
+# authorized?" vs "Will you require sponsorship?"), so one stored answer cannot
+# be applied safely without reading the actual question.
+[self_identification]
+gender = ""
+hispanic_latino = ""
+veteran_status = ""
+disability_status = ""

@@ -244,3 +244,23 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   look like comboboxes (each has an adjacent empty-id required input), so fill()
   may type text without registering a selection — Edgar must check visually.
   Next: Edgar runs `apply` on Anduril, reports which fields actually took.
+- 2026-07-22 (session 7, cont.2): combobox fix + resume upload + opt-in self-ID.
+  Edgar confirmed school/degree/discipline came out EMPTY, as predicted: they are
+  react-select comboboxes (role=combobox, class select__input), so fill() types
+  text that never becomes a selection. _choose_option now clicks the input,
+  types, waits, and clicks an option whose text matches EXACTLY (casefold) —
+  otherwise it clears the box and reports. GOVERNING PRINCIPLE, now shared by
+  three features: exact option match or leave it empty. A near-match is a lie
+  ("University of Texas at Austin" is not "Rio Grande Valley").
+  attach_resume sets identity.toml [files].resume_pdf on a file input whose
+  id/name says resume and not cover — the cover letter is never attached,
+  because the draft is unreviewed by definition.
+  Self-identification moved OUT of NEVER_FILL into opt-in SELF_ID_RULES at
+  Edgar's request: they are enumerated choices, not invertible yes/no questions,
+  so an exact match is unambiguous. Blank in identity.toml = left for the human.
+  Work authorization / sponsorship / export control STAY blocked forever: their
+  phrasing inverts between employers ("Are you authorized?" vs "Will you require
+  sponsorship?"), so one stored answer cannot be applied without reading the
+  question. Verified offline both ways (blank -> all None; filled -> exact
+  values; legal declarations -> None regardless). Next: Edgar reruns `apply`
+  after adding [self_identification] and [files].resume_pdf to identity.toml.

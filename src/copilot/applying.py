@@ -27,12 +27,27 @@ IDENTITY_PATH = pathlib.Path("identity.toml")
 # legal declarations that must be YOUR statement, and protected characteristics
 # that are nobody's business but yours. A wrong guess here is a false statement
 # on an application, so the cost of being careful is one manual field.
+# These stay manual permanently. They are yes/no legal declarations whose
+# phrasing inverts between employers - "Are you authorized to work?" and "Will
+# you require sponsorship?" want opposite answers to the same fact - so a stored
+# "Yes" cannot be applied safely without reading the question. You read it.
 NEVER_FILL = (
     "authorization", "authorized", "sponsorship", "sponsor", "visa", "citizen",
     "export control", "clearance", "felony", "convicted",
-    "gender", "ethnicity", "hispanic", "latino", "race", "veteran", "disability",
     "will you", "are you willing", "do you agree", "certify", "acknowledge",
     "how did you hear", "salary", "compensation expectation",
+)
+
+# Voluntary self-identification. Unlike the above these are enumerated choices,
+# not invertible yes/no questions, so an exact option match is unambiguous.
+# Only filled when you put a value in identity.toml, and only when that exact
+# option exists on the form - otherwise the field is left for you.
+SELF_ID_RULES = (
+    ("gender", ("self_identification", "gender")),
+    ("hispanic", ("self_identification", "hispanic_latino")),
+    ("latino", ("self_identification", "hispanic_latino")),
+    ("veteran", ("self_identification", "veteran_status")),
+    ("disability", ("self_identification", "disability_status")),
 )
 
 # Label text -> where the answer lives in identity.toml. Matched as a substring
@@ -68,10 +83,49 @@ def _value_for(label: str, identity: dict) -> str | None:
     lowered = label.lower()
     if any(banned in lowered for banned in NEVER_FILL):
         return None
-    for needle, (section, key) in FILL_RULES:
+    for needle, (section, key) in FILL_RULES + SELF_ID_RULES:
         if needle in lowered:
             return identity.get(section, {}).get(key) or None
     return None
+
+
+def _choose_option(page, field, value: str) -> bool:
+    """Pick an option in a react-select combobox. Exact text match or nothing.
+
+    Typing alone leaves these fields visually filled but actually empty, which
+    is why school/degree/discipline came out blank. And a near-match would be a
+    lie: 'University of Texas at Austin' is not 'University of Texas Rio Grande
+    Valley', so if the exact option is absent we clear the box and tell you.
+    """
+    field.click()
+    field.fill(value)
+    page.wait_for_timeout(600)  # let the menu filter
+    options = page.locator('[role="option"]')
+    for i in range(min(options.count(), 30)):
+        option = options.nth(i)
+        if (option.inner_text() or "").strip().casefold() == value.strip().casefold():
+            option.click()
+            return True
+    field.press("Escape")
+    field.fill("")
+    return False
+
+
+def attach_resume(page, identity: dict) -> str | None:
+    """Attach the resume PDF. Never the cover letter: that draft is unreviewed."""
+    path = identity.get("files", {}).get("resume_pdf", "")
+    if not path:
+        return None
+    resume = pathlib.Path(path)
+    if not resume.is_file():
+        return f"resume_pdf in identity.toml points at nothing: {resume}"
+    for i in range(page.locator('input[type="file"]').count()):
+        field = page.locator('input[type="file"]').nth(i)
+        ident = f"{field.get_attribute('id') or ''} {field.get_attribute('name') or ''}".lower()
+        if "resume" in ident and "cover" not in ident:
+            field.set_input_files(str(resume))
+            return f"attached {resume.name}"
+    return "no resume upload field found on this form"
 
 
 def prefill(page, identity: dict) -> tuple[list[str], list[str]]:
@@ -83,8 +137,6 @@ def prefill(page, identity: dict) -> tuple[list[str], list[str]]:
         if not target_id or not text:
             continue
         field = page.locator(f"#{target_id}")
-        # Only plain text-ish inputs: comboboxes, file pickers and radios all
-        # need a human eye, and a wrong click is worse than an empty field.
         if field.count() != 1 or (field.get_attribute("type") or "") not in {
             "text", "email", "tel", "url", "number",
         }:
@@ -94,8 +146,16 @@ def prefill(page, identity: dict) -> tuple[list[str], list[str]]:
             skipped.append(text[:60])
             continue
         try:
-            field.fill(value)
-            filled.append(f"{text[:40]} = {value}")
+            # A combobox announces itself; typing into one without choosing an
+            # option leaves it empty on submit.
+            if field.get_attribute("role") == "combobox":
+                if _choose_option(page, field, value):
+                    filled.append(f"{text[:40]} = {value}")
+                else:
+                    skipped.append(f"{text[:45]} (no option matching {value!r})")
+            else:
+                field.fill(value)
+                filled.append(f"{text[:40]} = {value}")
         except Error:
             skipped.append(f"{text[:60]} (could not type)")
     return filled, skipped
@@ -152,7 +212,11 @@ def apply(conn, id_prefix: str) -> None:
 
         if IDENTITY_PATH.exists():
             page.wait_for_timeout(1500)  # let the form's JS finish rendering
-            filled, skipped = prefill(page, load_identity())
+            identity = load_identity()
+            filled, skipped = prefill(page, identity)
+            attachment = attach_resume(page, identity)
+            if attachment:
+                print(f"\nresume: {attachment}")
             print(f"\npre-filled {len(filled)} field(s):")
             for item in filled:
                 print(f"  + {item}")
