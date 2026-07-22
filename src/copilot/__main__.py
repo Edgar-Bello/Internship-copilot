@@ -19,7 +19,7 @@ from copilot.checking import check_listings
 from copilot.draft import draft
 from copilot.report import report, score_report
 from copilot.scoring import score_matching
-from copilot.sources import SOURCE_NAME, fetch_listings, summer_postings
+from copilot.sources import SOURCES, fetch, summer_postings
 from copilot.storage import (
     ALLOWED_STATUSES,
     get_connection,
@@ -94,10 +94,12 @@ if __name__ == "__main__":
             sys.exit(1)
         apply(get_connection(), sys.argv[2])
     else:
-        listings = fetch_listings()
         conn = get_connection()
-        new = ingest(conn, SOURCE_NAME, listings)  # store facts: every season goes in
-        new_summer = summer_postings(new)          # opinions at read time: show Summer only
-        print(f"{len(new)} new postings stored ({len(new_summer)} Summer):")
-        for post in new_summer:
-            print(f"{post['company_name']} - {post['title']} - {post['locations'][0]}")
+        for source in SOURCES:
+            listings = fetch(source)
+            new = ingest(conn, source.name, listings)  # store facts: every season goes in
+            new_summer = summer_postings(new)          # opinions at read time: Summer only
+            print(f"{source.name}: {len(new)} new stored ({len(new_summer)} Summer)")
+            for post in new_summer:
+                location = post["locations"][0] if post["locations"] else "-"
+                print(f"  {post['company_name']} - {post['title']} - {location}")
