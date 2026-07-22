@@ -1,0 +1,33 @@
+# Template for identity.toml, which holds the details Phase 3 types into
+# application forms. Copy this file to identity.toml and put your real values
+# there — identity.toml is gitignored, this example is committed.
+#
+#   copy identity.example.toml identity.toml
+#
+# Nothing here is secret in the password sense, but this repo is public and a
+# phone number in a public repo is a phone number on the internet forever.
+
+[personal]
+first_name = "Ada"
+last_name = "Lovelace"
+email = "ada@example.com"
+phone = "555-000-0000"
+# City and state you'd put on an application, not necessarily where you live.
+location = "Austin, TX"
+
+[links]
+linkedin = "https://linkedin.com/in/example"
+github = "https://github.com/example"
+website = ""
+
+[education]
+school = "Example State University"
+degree = "Bachelor of Science"
+major = "Computer Science"
+# Forms ask for this in wildly different formats; keep both.
+graduation_month = "May"
+graduation_year = "2028"
+
+[files]
+# Path to the PDF you actually attach. Keep it outside the repo, or gitignored.
+resume_pdf = "C:/Users/you/Documents/resume.pdf"

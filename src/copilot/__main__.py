@@ -8,10 +8,12 @@ Usage:
   .venv\\Scripts\\python.exe -m copilot describe <id-prefix> [--file F]  store a description you pasted yourself
   .venv\\Scripts\\python.exe -m copilot score [--force]          score matching postings (--force rescores all)
   .venv\\Scripts\\python.exe -m copilot draft <id-prefix> [--force]  write a cover letter draft to drafts/
+  .venv\\Scripts\\python.exe -m copilot apply <id-prefix>        open the posting in a browser (never submits)
 """
 import pathlib
 import sys
 
+from copilot.applying import apply
 from copilot.checking import check_listings
 from copilot.draft import draft
 from copilot.report import report
@@ -77,6 +79,11 @@ if __name__ == "__main__":
             print("usage: python -m copilot draft <id-prefix> [--force]")
             sys.exit(1)
         draft(get_connection(), sys.argv[2], force="--force" in sys.argv)
+    elif len(sys.argv) > 1 and sys.argv[1] == "apply":
+        if len(sys.argv) < 3:
+            print("usage: python -m copilot apply <id-prefix>")
+            sys.exit(1)
+        apply(get_connection(), sys.argv[2])
     else:
         listings = fetch_listings()
         conn = get_connection()

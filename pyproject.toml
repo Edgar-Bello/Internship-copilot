@@ -4,7 +4,11 @@ version = "0.1.0"
 description = "Internship application co-pilot: aggregate, track, draft - human in control"
 requires-python = ">=3.14"
 dependencies = [
-    "requests", "openai", "python-dotenv",
+    "requests",
+    "openai",
+    "python-dotenv",
+    "pydantic",   # imported directly by llm.py, not just pulled in by openai
+    "playwright", # Phase 3: opens postings for assisted apply
 ]
 
 [project.optional-dependencies]
