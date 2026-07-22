@@ -11,6 +11,49 @@ class FitAssessment(BaseModel):
     emphasize: list[str]
     red_flags: list[str]
 
+
+class OptionChoice(BaseModel):
+    choice: str | None
+    reason: str
+
+
+OPTION_MATCH_INSTRUCTIONS = """You map one value from a job candidate's profile onto a
+form's fixed list of options, for a field they are filling in.
+
+Choose the option that means the SAME THING the candidate wrote. Different wording
+for the same fact is fine: "Bachelor of Science" and "Bachelor's Degree" are the
+same degree level; "UT Rio Grande Valley" and "The University of Texas Rio Grande
+Valley" are the same school.
+
+A near neighbour is NOT the same thing. A different school, a different degree
+level, or a different field of study would be a false statement on a job
+application, and the candidate signs this, not you. When the list has nothing
+equivalent, return null for `choice`.
+
+Blank costs the candidate ten seconds of typing. Wrong costs them their
+credibility. Prefer blank."""
+
+
+def match_option(client: OpenAI, label: str, wanted: str, options: list[str]) -> str | None:
+    """Pick the option equivalent to `wanted`, or None. Never returns anything off the list."""
+    listing = "\n".join(f"- {option}" for option in options)
+    response = client.responses.parse(
+        model=MODEL,
+        input=[
+            {"role": "system", "content": OPTION_MATCH_INSTRUCTIONS},
+            {
+                "role": "user",
+                "content": f"FIELD: {label}\nCANDIDATE WROTE: {wanted}\n\nOPTIONS:\n{listing}",
+            },
+        ],
+        text_format=OptionChoice,
+    )
+    parsed = response.output_parsed
+    if parsed is None or parsed.choice is None:
+        return None
+    # Trust nothing: a hallucinated option is not on the form and must not be typed.
+    return parsed.choice if parsed.choice in options else None
+
 SCORING_INSTRUCTIONS = """You assess how well a CS student's resume fits an internship posting.
 Score 1-5 (5 = exceptional fit). In `emphasize`, name 2-4 items from the RESUME
 this posting most wants to hear about. Invent nothing about the candidate or the

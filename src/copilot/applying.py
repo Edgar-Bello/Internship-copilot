@@ -16,6 +16,7 @@ import tomllib
 from playwright.sync_api import Error, sync_playwright
 
 from copilot.draft import DRAFTS_DIR, _slug
+from copilot.llm import get_client, match_option
 
 SELECT_ONE_SQL = """SELECT p.*, s.score, s.red_flags
 FROM postings p
@@ -123,17 +124,47 @@ def _reset_field(page, field) -> None:
     page.wait_for_timeout(250)  # let the close finish; a closing menu still eats clicks
 
 
-def _choose_option(page, field, value: str) -> tuple[bool, str]:
-    """Pick an option in a react-select combobox. Exact text match or nothing.
+def _choose_option(page, field, value: str, label: str = "", client=None) -> tuple[bool, str]:
+    """Pick an option in a react-select combobox.
 
-    Returns (chose_one, why_not). fill() cannot be used here: it sets the value
-    programmatically and react-select only reacts to real keystrokes, so the
-    menu never opens and the field silently stays empty - which is exactly how
-    school/degree/discipline submitted blank. press_sequentially types for real.
+    First tries to match the words exactly. If that fails and a model client is
+    given, it shows the model the employer's real option list and asks which one
+    means the same thing - because "Bachelor of Science" and "Bachelor's Degree"
+    are one fact in two vocabularies, and only a human-ish reader sees that.
 
-    A near-match is never accepted: 'University of Texas at Austin' is not
-    'University of Texas Rio Grande Valley'.
+    The model can only answer with an option that is actually on the list, or
+    null. A different school or a different degree level is never accepted: the
+    candidate signs this form, so blank always beats plausible.
     """
+    matched, detail = _try_exact(page, field, value)
+    if matched or client is None:
+        if not matched:
+            _reset_field(page, field)
+        return matched, detail
+
+    # Exact matching failed. Show the model the employer's actual list and let it
+    # recognise the same fact under different wording - "Bachelor of Science" is
+    # "Bachelor's Degree". It may only answer with an option that exists, or null.
+    offered = _list_all_options(page, field)
+    if not offered:
+        _reset_field(page, field)
+        return False, "the menu never opened"
+
+    suggestion = match_option(client, label, value, offered)
+    if suggestion is None:
+        _reset_field(page, field)
+        return False, f"nothing here means {value!r}; they offer: {'; '.join(offered[:8])}"
+
+    _reset_field(page, field)
+    matched, detail = _try_exact(page, field, suggestion)
+    if matched:
+        return True, f"{detail}  (matched from {value!r})"
+    _reset_field(page, field)
+    return False, f"{value!r} looks like {suggestion!r}, but selecting it failed"
+
+
+def _try_exact(page, field, value: str) -> tuple[bool, str]:
+    """Type `value` and click an option that means exactly that. No interpretation."""
     field.scroll_into_view_if_needed()
     field.click()
     # A click swallowed by a neighbour's closing menu leaves this field
@@ -157,27 +188,21 @@ def _choose_option(page, field, value: str) -> tuple[bool, str]:
     if len(matches) == 1:
         options.nth(matches[0]).click()
         return True, seen[matches[0]]
-
     if len(matches) > 1:
-        _reset_field(page, field)
         return False, f"{len(matches)} options match equally - pick one yourself"
-
     if count == 0:
-        # Zero visible options is ambiguous: the menu may never have opened, or
-        # the typed text may have filtered every choice away. Clear the filter
-        # and look again, so the message names the real problem.
-        field.fill("")
-        page.wait_for_timeout(500)
-        available = page.locator('[role="option"]:visible, .select__option:visible')
-        total = available.count()
-        offered = [(available.nth(i).inner_text() or "").strip() for i in range(min(total, 10))]
-        _reset_field(page, field)
-        if total:
-            return False, f"nothing here is called {value!r}; they offer: {'; '.join(offered)}"
-        return False, "the menu never opened"
-
-    _reset_field(page, field)
+        return False, f"no option contains {value!r}"
     return False, f"{count} offered, none matched - e.g. {'; '.join(seen[:5])}"
+
+
+def _list_all_options(page, field) -> list[str]:
+    """Every option this field offers, filter cleared."""
+    field.scroll_into_view_if_needed()
+    field.click()
+    field.fill("")
+    page.wait_for_timeout(600)
+    options = page.locator('[role="option"]:visible, .select__option:visible')
+    return [(options.nth(i).inner_text() or "").strip() for i in range(min(options.count(), 150))]
 
 
 def attach_resume(page, identity: dict) -> str | None:
@@ -197,8 +222,18 @@ def attach_resume(page, identity: dict) -> str | None:
     return "no resume upload field found on this form"
 
 
-def prefill(page, identity: dict) -> tuple[list[str], list[str]]:
-    """Type what we can into labelled text inputs. Returns (filled, left alone)."""
+def _is_self_id(label: str) -> bool:
+    lowered = label.lower()
+    return any(needle in lowered for needle, _ in SELF_ID_RULES)
+
+
+def prefill(page, identity: dict, client=None) -> tuple[list[str], list[str]]:
+    """Type what we can into labelled text inputs. Returns (filled, left alone).
+
+    `client` enables model-assisted matching for comboboxes whose wording differs
+    from yours. It is never used for self-identification: those lists are short
+    and legally meaningful, so if your words are not their words, you choose.
+    """
     filled, skipped = [], []
     for label in page.locator("label[for]").all():
         target_id = label.get_attribute("for") or ""
@@ -218,7 +253,8 @@ def prefill(page, identity: dict) -> tuple[list[str], list[str]]:
             # A combobox announces itself; typing into one without choosing an
             # option leaves it empty on submit.
             if field.get_attribute("role") == "combobox":
-                chose, detail = _choose_option(page, field, value)
+                helper = None if _is_self_id(text) else client
+                chose, detail = _choose_option(page, field, value, label=text, client=helper)
                 if chose:
                     filled.append(f"{text[:40]} = {detail}")
                 else:
@@ -286,7 +322,7 @@ def apply(conn, id_prefix: str) -> None:
         if IDENTITY_PATH.exists():
             page.wait_for_timeout(1500)  # let the form's JS finish rendering
             identity = load_identity()
-            filled, skipped = prefill(page, identity)
+            filled, skipped = prefill(page, identity, client=get_client())
             attachment = attach_resume(page, identity)
             if attachment:
                 print(f"\nresume: {attachment}")
