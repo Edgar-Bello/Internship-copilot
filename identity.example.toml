@@ -14,6 +14,8 @@ email = "ada@example.com"
 phone = "555-000-0000"
 # City and state you'd put on an application, not necessarily where you live.
 location = "Austin, TX"
+# Greenhouse asks for this separately and it is usually required.
+country = "United States"
 
 [links]
 linkedin = "https://linkedin.com/in/example"
