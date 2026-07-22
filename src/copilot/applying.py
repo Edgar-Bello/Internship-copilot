@@ -10,6 +10,7 @@ last click is always yours.
 """
 import json
 import pathlib
+import re
 import tomllib
 
 from playwright.sync_api import Error, sync_playwright
@@ -59,6 +60,7 @@ FILL_RULES = (
     ("last name", ("personal", "last_name")),
     ("email", ("personal", "email")),
     ("phone", ("personal", "phone")),
+    ("country", ("personal", "country")),
     ("linkedin", ("links", "linkedin")),
     ("github", ("links", "github")),
     ("website", ("links", "website")),
@@ -89,26 +91,70 @@ def _value_for(label: str, identity: dict) -> str | None:
     return None
 
 
-def _choose_option(page, field, value: str) -> bool:
+def _normalize(text: str) -> str:
+    """Compare option text the way a human reads it, not byte for byte.
+
+    Greenhouse lists 'The University of Texas Rio Grande Valley'; a resume says
+    'University of Texas Rio Grande Valley'. Same school. Punctuation, casing
+    and a leading 'the' are noise - the words are what identify it.
+    """
+    text = re.sub(r"^the\s+", "", text.strip().casefold())
+    return re.sub(r"[^a-z0-9]+", " ", text).strip()
+
+
+def _close_menu(page, field) -> None:
+    """Shut the dropdown before touching anything else.
+
+    An open react-select menu paints its options over the rest of the form and
+    swallows clicks meant for the next field - Playwright then retries for 30s,
+    scrolling the page up and down, which is what it looks like from outside.
+    """
+    field.press("Escape")
+    try:
+        page.locator(".select__option").first.wait_for(state="hidden", timeout=2000)
+    except Error:
+        page.keyboard.press("Escape")
+
+
+def _choose_option(page, field, value: str) -> tuple[bool, str]:
     """Pick an option in a react-select combobox. Exact text match or nothing.
 
-    Typing alone leaves these fields visually filled but actually empty, which
-    is why school/degree/discipline came out blank. And a near-match would be a
-    lie: 'University of Texas at Austin' is not 'University of Texas Rio Grande
-    Valley', so if the exact option is absent we clear the box and tell you.
+    Returns (chose_one, why_not). fill() cannot be used here: it sets the value
+    programmatically and react-select only reacts to real keystrokes, so the
+    menu never opens and the field silently stays empty - which is exactly how
+    school/degree/discipline submitted blank. press_sequentially types for real.
+
+    A near-match is never accepted: 'University of Texas at Austin' is not
+    'University of Texas Rio Grande Valley'.
     """
+    field.scroll_into_view_if_needed()
     field.click()
-    field.fill(value)
-    page.wait_for_timeout(600)  # let the menu filter
-    options = page.locator('[role="option"]')
-    for i in range(min(options.count(), 30)):
-        option = options.nth(i)
-        if (option.inner_text() or "").strip().casefold() == value.strip().casefold():
-            option.click()
-            return True
-    field.press("Escape")
+    field.press_sequentially(value, delay=20)
+    page.wait_for_timeout(800)  # let the menu render and filter
+
+    options = page.locator('[role="option"]:visible, .select__option:visible')
+    count = options.count()
+    seen = [(options.nth(i).inner_text() or "").strip() for i in range(min(count, 40))]
+    wanted = _normalize(value)
+
+    matches = [i for i, text in enumerate(seen) if _normalize(text) == wanted]
+    if not matches and len(seen) == 1 and wanted in _normalize(seen[0]):
+        # Typing the full value narrowed the list to exactly one entry that
+        # contains it: 'X' vs 'The X'. One candidate is not a guess.
+        matches = [0]
+    if len(matches) == 1:
+        options.nth(matches[0]).click()
+        chosen = seen[matches[0]]
+        _close_menu(page, field)
+        return True, chosen
+
+    _close_menu(page, field)
     field.fill("")
-    return False
+    if count == 0:
+        return False, "no menu opened"
+    if len(matches) > 1:
+        return False, f"{len(matches)} options match equally - pick one yourself"
+    return False, f"{count} offered, none matched - e.g. {'; '.join(seen[:3])}"
 
 
 def attach_resume(page, identity: dict) -> str | None:
@@ -149,10 +195,11 @@ def prefill(page, identity: dict) -> tuple[list[str], list[str]]:
             # A combobox announces itself; typing into one without choosing an
             # option leaves it empty on submit.
             if field.get_attribute("role") == "combobox":
-                if _choose_option(page, field, value):
-                    filled.append(f"{text[:40]} = {value}")
+                chose, detail = _choose_option(page, field, value)
+                if chose:
+                    filled.append(f"{text[:40]} = {detail}")
                 else:
-                    skipped.append(f"{text[:45]} (no option matching {value!r})")
+                    skipped.append(f"{text[:35]} -> {value!r}: {detail}")
             else:
                 field.fill(value)
                 filled.append(f"{text[:40]} = {value}")
@@ -207,6 +254,9 @@ def apply(conn, id_prefix: str) -> None:
             print(f"  {posting['url']}")
             return
         page = browser.new_page()
+        # Fail fast: the default 30s turns one stuck field into half a minute
+        # of the page scrolling itself while Playwright retries.
+        page.set_default_timeout(8000)
         page.goto(posting["url"], wait_until="domcontentloaded")
         print(f"\nopened: {page.title()[:80]}")
 

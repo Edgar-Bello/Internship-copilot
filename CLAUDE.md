@@ -264,3 +264,23 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   question. Verified offline both ways (blank -> all None; filled -> exact
   values; legal declarations -> None regardless). Next: Edgar reruns `apply`
   after adding [self_identification] and [files].resume_pdf to identity.toml.
+- 2026-07-22 (session 7, cont.3): comboboxes FIXED and verified end to end.
+  Edgar reported no selection plus the page scrolling up and down. Claude's
+  hypothesis (fill() does not trigger react-select, needs press_sequentially)
+  was WRONG — a headless probe against the live Anduril form showed both fill()
+  and press_sequentially() open the menu with 1 option. Two real causes:
+  (1) Greenhouse lists "The University of Texas Rio Grande Valley"; identity.toml
+  says it without "The", so byte-exact matching rejected the only right answer.
+  (2) The open menu was never closed, so its options overlaid the form and
+  intercepted the click on the next field — Playwright then retried for the full
+  30s default, scrolling the page, which is exactly what Edgar saw.
+  Fixes: _normalize() compares by words (casefold, drop leading "the", strip
+  punctuation); a single remaining option containing the typed value counts as a
+  match ("United States +1" for "United States"); >1 equal match still refuses;
+  _close_menu() presses Escape and waits for options to hide; page timeout cut
+  to 8s so a stuck field fails fast instead of thrashing.
+  VERIFIED headless against the real form: 13 fields filled including all five
+  comboboxes (school/degree/discipline/end-month/country) and the three self-ID
+  answers that were set; blank self-ID and every legal declaration left alone.
+  NOTE: Claude CAN test the form headless — only the headed window needs Edgar.
+  Next: Edgar reruns `apply` (resume upload still unverified), then TESTS.
