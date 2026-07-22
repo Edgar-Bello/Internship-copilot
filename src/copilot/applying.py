@@ -259,6 +259,27 @@ def attach_resume(page, identity: dict) -> str | None:
     return "no resume upload field found on this form"
 
 
+def _embedded_form_url(page) -> str | None:
+    """Career pages often iframe the real form in from the ATS.
+
+    Playwright only looks in the main frame, so an embedded application is
+    invisible - Stoke Space's page showed us a newsletter box while 31 real
+    fields sat in a Greenhouse iframe. The embed URL is a working page on its
+    own, so we go there instead of teaching every helper about frames.
+    """
+    for frame in page.frames:
+        if frame == page.main_frame:
+            continue
+        if "greenhouse.io" not in frame.url and "ashbyhq.com" not in frame.url:
+            continue
+        try:
+            if frame.locator("label[for]").count() >= 5:
+                return frame.url
+        except Error:
+            continue
+    return None
+
+
 def _follow_apply_link(page) -> str | None:
     """Click through from an advert to the form, if there is an obvious way.
 
@@ -417,12 +438,20 @@ def apply(conn, id_prefix: str) -> None:
             client = get_client()
             filled, skipped = prefill(page, identity, client=client)
             if not filled and not skipped:
-                # Either an advert page or something that is not an application
+                # Either an advert page, an embedded form, or not an application
                 # at all. Look for a way through; fill nothing until we find one.
-                print("no application form here - looking for an Apply link...")
-                moved = _follow_apply_link(page)
+                print("no application form in this page - looking further...")
+                embedded = _embedded_form_url(page)
+                if embedded:
+                    print(f"the form is embedded from the ATS; opening it directly:\n  {embedded}")
+                    page.goto(embedded, wait_until="domcontentloaded")
+                    page.wait_for_timeout(2500)
+                    moved = embedded
+                else:
+                    moved = _follow_apply_link(page)  # navigates by itself
+                    if moved:
+                        print(f"followed an Apply link to: {moved}")
                 if moved:
-                    print(f"followed to: {moved}")
                     filled, skipped = prefill(page, identity, client=client)
                 if not filled and not skipped:
                     print("still no application form on this page. Nothing was typed.")

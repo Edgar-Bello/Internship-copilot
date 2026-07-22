@@ -432,3 +432,19 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   before listing (wired in __main__, not report, to avoid a circular import).
   CONFIRMED shortlist was already dropping closed/rejected/gone: on live data
   36 matching -> 26 shown, with 4 that Edgar had marked closed and 5 delisted.
+- 2026-07-22 (session 7, cont.12): IFRAME — Claude's "there is no form on Stoke
+  Space" was WRONG and Edgar was right. The page has 8 frames; one is
+  job-boards.greenhouse.io/embed/job_app?for=stokespacetechnologies with 31
+  labels. Playwright locators only search the MAIN frame, so an embedded
+  application is invisible — which is also why the newsletter box was the only
+  field we could see. _embedded_form_url(page) scans page.frames for a
+  greenhouse/ashby frame carrying >=5 labels and returns its URL; apply then
+  navigates there directly, since a Greenhouse embed URL is a working page on
+  its own. Chosen over making every helper frame-aware.
+  Fallback order in apply is now: prefill -> (if nothing) embedded form ->
+  (else) Apply link -> (else) say nothing was typed + print `mark <id> closed`.
+  RESULT: Stoke Space 0 -> 9 fields. The newsletter guard still earns its place:
+  it stops the wrong fill, then the frame search finds the right form.
+  LESSON: two consecutive wrong diagnoses from Claude here ("press_sequentially
+  will fix it", "there is no form") were both settled by Edgar running the real
+  thing. Treat Claude's headless probe as evidence about the main frame only.
