@@ -127,6 +127,45 @@ def ats_key(url: str) -> str | None:
     return None
 
 
+def _greenhouse_exists(board: str, job_id: str) -> bool:
+    try:
+        resp = requests.get(
+            f"https://boards-api.greenhouse.io/v1/boards/{board}/jobs/{job_id}", timeout=TIMEOUT
+        )
+        return resp.status_code == 200
+    except requests.RequestException:
+        return False
+
+
+def application_url(url: str, company: str = "") -> str | None:
+    """Where the actual form lives, when the link we have is only an advert.
+
+    Company career pages routinely describe a job and hide the form behind an
+    Apply button. Often the page URL still carries the ATS job id - IMC's
+    /us/careers/jobs/4823924101 is Greenhouse job 4823924101 - so the real form
+    can be reached directly. Returns None when the URL is already the form, or
+    when we cannot prove where the form is.
+    """
+    parsed = urllib.parse.urlparse(url)
+    if "greenhouse.io" in parsed.netloc or "ashbyhq.com" in parsed.netloc:
+        return None  # already at the ATS
+
+    key = ats_key(url)  # picks up ?gh_jid=
+    job_id = key.split(":", 1)[1] if key and key.startswith("greenhouse:") else None
+    if job_id is None:
+        # A long digit run at the end of the path is the usual give-away.
+        parts = [p for p in parsed.path.split("/") if p]
+        if parts and parts[-1].isdigit() and len(parts[-1]) >= 7:
+            job_id = parts[-1]
+    if not job_id:
+        return None
+
+    for board in _board_candidates(company, parsed.netloc):
+        if _greenhouse_exists(board, job_id):
+            return f"https://job-boards.greenhouse.io/{board}/jobs/{job_id}"
+    return None
+
+
 def supports(url: str) -> bool:
     """True when this URL is on an ATS we can query - distinguishes 'delisted' from 'unsupported'."""
     parsed = urllib.parse.urlparse(url)

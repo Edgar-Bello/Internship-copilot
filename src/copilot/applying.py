@@ -12,9 +12,11 @@ import json
 import pathlib
 import re
 import tomllib
+from urllib.parse import urljoin
 
 from playwright.sync_api import Error, sync_playwright
 
+from copilot.descriptions import application_url
 from copilot.draft import DRAFTS_DIR, _slug
 from copilot.llm import get_client, match_option
 
@@ -38,6 +40,9 @@ NEVER_FILL = (
     "export control", "clearance", "felony", "convicted",
     "will you", "are you willing", "do you agree", "certify", "acknowledge",
     "how did you hear", "salary", "compensation expectation",
+    # Not a declaration - a different fact. "When did you graduate from High
+    # School" otherwise matches the `school` rule and gets a university typed in.
+    "high school",
 )
 
 # Voluntary self-identification. Unlike the above these are enumerated choices,
@@ -62,6 +67,7 @@ FILL_RULES = (
     ("email", ("personal", "email")),
     ("phone", ("personal", "phone")),
     ("country", ("personal", "country")),
+    ("location (city)", ("personal", "location")),
     ("linkedin", ("links", "linkedin")),
     ("github", ("links", "github")),
     ("website", ("links", "website")),
@@ -144,6 +150,7 @@ def _choose_option(page, field, value: str, label: str = "", client=None) -> tup
         if not matched:
             _reset_field(page, field)
         return matched, detail
+    _reset_field(page, field)
 
     # Exact matching failed. Show the model the employer's actual list and let it
     # recognise the same fact under different wording - "Bachelor of Science" is
@@ -152,6 +159,12 @@ def _choose_option(page, field, value: str, label: str = "", client=None) -> tup
     if not offered:
         _reset_field(page, field)
         return False, "the menu never opened"
+    if len(offered) >= 60:
+        # A long alphabetical list arrives truncated, so the model would only
+        # ever see the entries starting with A. Report what the form's own
+        # search actually said instead - that is the useful fact.
+        _reset_field(page, field)
+        return False, f"{detail}; searched several ways, pick this one yourself"
 
     suggestion = match_option(client, label, value, offered)
     if suggestion is None:
@@ -166,36 +179,57 @@ def _choose_option(page, field, value: str, label: str = "", client=None) -> tup
     return False, f"{value!r} looks like {suggestion!r}, but selecting it failed"
 
 
+def _search_variants(value: str) -> list[str]:
+    """Ways to type a value so the form's own filter finds it.
+
+    These filters match literal substrings, so the full string often finds
+    nothing: IMC lists a school we spell differently, and typing the whole name
+    matches no entry at all. Shorter, distinctive fragments do - "Rio Grande
+    Valley" narrows a list of thousands to one. Whatever comes back is still
+    judged against the FULL value, so a fragment cannot pick the wrong school.
+    """
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", value) if w.lower() != "the"]
+    variants = [value, " ".join(words)]
+    if len(words) >= 3:
+        variants.append(" ".join(words[-3:]))
+    if len(words) >= 2:
+        variants.append(" ".join(words[-2:]))
+    return list(dict.fromkeys(v for v in variants if v.strip()))
+
+
 def _try_exact(page, field, value: str) -> tuple[bool, str]:
     """Type `value` and click an option that means exactly that. No interpretation."""
-    field.scroll_into_view_if_needed()
-    field.click()
-    # A click swallowed by a neighbour's closing menu leaves this field
-    # unfocused, and every keystroke then goes nowhere. Check, don't assume.
-    if not field.evaluate("el => el === document.activeElement"):
-        page.wait_for_timeout(400)
-        field.click()
-    field.press_sequentially(value, delay=20)
-    page.wait_for_timeout(800)  # let the menu render and filter
-
-    options = page.locator('[role="option"]:visible, .select__option:visible')
-    count = options.count()
-    seen = [(options.nth(i).inner_text() or "").strip() for i in range(min(count, 40))]
     wanted = _normalize(value)
+    last = "the menu never opened"
+    for attempt, query in enumerate(_search_variants(value)):
+        if attempt:
+            _reset_field(page, field)
+        field.scroll_into_view_if_needed()
+        field.click()
+        # A click swallowed by a neighbour's closing menu leaves this field
+        # unfocused, and every keystroke then goes nowhere. Check, don't assume.
+        if not field.evaluate("el => el === document.activeElement"):
+            page.wait_for_timeout(400)
+            field.click()
+        field.press_sequentially(query, delay=20)
+        page.wait_for_timeout(800)  # let the menu render and filter
 
-    matches = [i for i, text in enumerate(seen) if _normalize(text) == wanted]
-    if not matches and len(seen) == 1 and wanted in _normalize(seen[0]):
-        # Typing the full value narrowed the list to exactly one entry that
-        # contains it: 'X' vs 'The X'. One candidate is not a guess.
-        matches = [0]
-    if len(matches) == 1:
-        options.nth(matches[0]).click()
-        return True, seen[matches[0]]
-    if len(matches) > 1:
-        return False, f"{len(matches)} options match equally - pick one yourself"
-    if count == 0:
-        return False, f"no option contains {value!r}"
-    return False, f"{count} offered, none matched - e.g. {'; '.join(seen[:5])}"
+        options = page.locator('[role="option"]:visible, .select__option:visible')
+        count = options.count()
+        seen = [(options.nth(i).inner_text() or "").strip() for i in range(min(count, 40))]
+
+        matches = [i for i, text in enumerate(seen) if _normalize(text) == wanted]
+        if not matches and len(seen) == 1 and wanted in _normalize(seen[0]):
+            # One remaining entry that contains the whole value: 'X' vs 'The X'.
+            matches = [0]
+        if len(matches) == 1:
+            options.nth(matches[0]).click()
+            return True, seen[matches[0]]
+        if len(matches) > 1:
+            return False, f"{len(matches)} options match equally - pick one yourself"
+        last = (f"no option contains {query!r}" if count == 0
+                else f"{count} offered, none matched - e.g. {'; '.join(seen[:5])}")
+    return False, last
 
 
 def _list_all_options(page, field) -> list[str]:
@@ -225,6 +259,31 @@ def attach_resume(page, identity: dict) -> str | None:
     return "no resume upload field found on this form"
 
 
+def _follow_apply_link(page) -> str | None:
+    """Click through from an advert to the form, if there is an obvious way.
+
+    Never touches anything that says submit: the point is to reach the form, and
+    the last click on a real application is always the human's.
+    """
+    for role in ("link", "button"):
+        control = page.get_by_role(role, name=re.compile(r"\bapply\b", re.I)).first
+        if not control.count():
+            continue
+        text = (control.inner_text() or "").lower()
+        if "submit" in text:
+            continue
+        if role == "link":
+            href = control.get_attribute("href")
+            if not href:
+                continue
+            page.goto(urljoin(page.url, href), wait_until="domcontentloaded")
+        else:
+            control.click()
+        page.wait_for_timeout(2500)
+        return page.url
+    return None
+
+
 def _is_self_id(label: str) -> bool:
     lowered = label.lower()
     return any(needle in lowered for needle, _ in SELF_ID_RULES)
@@ -243,7 +302,11 @@ def prefill(page, identity: dict, client=None) -> tuple[list[str], list[str]]:
         text = (label.inner_text() or "").strip().replace("\n", " ")
         if not target_id or not text:
             continue
-        field = page.locator(f"#{target_id}")
+        if '"' in target_id:
+            continue  # would break the selector below; nothing we can safely fill
+        # Attribute form, not "#id": real forms carry ids like
+        # question_9170567101[]_66340074101, which is not valid CSS after a hash.
+        field = page.locator(f'[id="{target_id}"]')
         if field.count() != 1 or (field.get_attribute("type") or "") not in {
             "text", "email", "tel", "url", "number",
         }:
@@ -319,13 +382,30 @@ def apply(conn, id_prefix: str) -> None:
         # Fail fast: the default 30s turns one stuck field into half a minute
         # of the page scrolling itself while Playwright retries.
         page.set_default_timeout(8000)
-        page.goto(posting["url"], wait_until="domcontentloaded")
+
+        # The feed often links the advert, not the form. When the advert's URL
+        # still carries the ATS job id, go straight to the form instead.
+        target = application_url(posting["url"], posting["company"]) or posting["url"]
+        if target != posting["url"]:
+            print(f"\nthe link is an advert; the form is at:\n  {target}")
+        page.goto(target, wait_until="domcontentloaded")
         print(f"\nopened: {page.title()[:80]}")
 
         if IDENTITY_PATH.exists():
             page.wait_for_timeout(1500)  # let the form's JS finish rendering
             identity = load_identity()
-            filled, skipped = prefill(page, identity, client=get_client())
+            client = get_client()
+            filled, skipped = prefill(page, identity, client=client)
+            if not filled and not skipped:
+                # No labelled inputs at all: this is an advert page, so look for
+                # the way through to the form.
+                print("no form on this page - looking for an Apply link...")
+                moved = _follow_apply_link(page)
+                if moved:
+                    print(f"followed to: {moved}")
+                    filled, skipped = prefill(page, identity, client=client)
+                else:
+                    print("could not find one - open it yourself from the page.")
             attachment = attach_resume(page, identity)
             if attachment:
                 print(f"\nresume: {attachment}")

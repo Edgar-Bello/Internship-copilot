@@ -361,3 +361,30 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   no-auto-merge decision. Phase 1-3 all complete; Edgar starts applying.
   Remaining known gaps: score staleness (checked_at newer than scored_at),
   more sources, mojibake in stored rationales, __main__ if/elif wants argparse.
+- 2026-07-22 (session 7, cont.8): advert-vs-form, from a real failure on IMC
+  (80f8fd77) where the feed URL is a career page with an Apply button.
+  descriptions.application_url() spots an ATS job id still present in a company
+  URL (imc.com/us/careers/jobs/4823924101 -> Greenhouse imc/4823924101), finds
+  the board with the existing candidate guessing, and returns the direct form.
+  Resolves 7 of the Summer postings (IMC, Stoke Space, Tower Research, Jump
+  Trading x4). Generic fallback too: when a page yields no labelled inputs at
+  all, _follow_apply_link clicks an "apply" link/button (never one saying
+  submit) and prefill runs again.
+  Three bugs found only because a SECOND form was finally exercised:
+  (1) `#id` selectors break on real ids like question_9170567101[]_66340074101
+      -> use [id="..."], which also crashed the whole prefill before.
+  (2) "When did you graduate from High School" matched the `school` rule and
+      would have typed a university into it -> "high school" added to NEVER_FILL.
+  (3) These combobox filters match literal substrings, so the full school name
+      finds nothing when the employer spells it differently. _search_variants
+      now retries with shorter distinctive fragments (drop "the", last 3 words,
+      last 2), and every candidate is still judged against the FULL value, so a
+      fragment cannot select the wrong school.
+  Long lists (60+) no longer go to the model: an alphabetical list arrives
+  truncated, so it would only ever see entries starting with A. It reports what
+  the form's own search said instead.
+  VERIFIED on two different forms: IMC 11 filled (School correctly refused —
+  their list genuinely has no UT Rio Grande Valley, confirmed by searching
+  "Rio Grande" on their own widget), Anduril 11 filled, no regressions, 71
+  tests green. NOTE for Edgar: IMC's "university email" field gets the personal
+  email from identity.toml — worth checking before submitting.
