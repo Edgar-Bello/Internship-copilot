@@ -33,7 +33,9 @@ CREATE_SCORES_SQL = """CREATE TABLE IF NOT EXISTS scores (
     source TEXT, source_id TEXT, score INTEGER, rationale TEXT, emphasize TEXT, 
     red_flags TEXT, model TEXT, scored_at TEXT, PRIMARY KEY (source, source_id))"""
 
-ALLOWED_STATUSES = ("new", "seen", "interested", "applied", "rejected")
+# "closed" is your own finding that the posting is gone - distinct from
+# "rejected", which is theirs about you. Both drop off the to-do list.
+ALLOWED_STATUSES = ("new", "seen", "interested", "applied", "rejected", "closed")
 
 def get_connection() -> sqlite3.Connection:
     DB_PATH.parent.mkdir(exist_ok=True)

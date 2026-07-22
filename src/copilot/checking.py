@@ -16,7 +16,8 @@ def check_listings(conn, recheck: bool = False) -> None:
     recheck=True re-asks postings already checked; otherwise they are skipped,
     so a rerun costs nothing for answers we already have.
     """
-    postings = matching_postings(conn)
+    # include_closed: a delisted posting is exactly what --recheck exists for.
+    postings = matching_postings(conn, include_closed=True)
     checkable = [p for p in postings if supports(p["url"])]
     todo = checkable if recheck else [p for p in checkable if p["checked_at"] is None]
     skipped = len(postings) - len(checkable)

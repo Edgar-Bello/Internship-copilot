@@ -4,7 +4,8 @@ The rule under test: merge only when the ATS says two rows are the same job.
 Everything else stays on the list, because a wrong merge silently costs an
 application and a visible duplicate costs three seconds.
 """
-from copilot.report import dedupe_by_ats
+from copilot.report import HIDDEN_STATUSES, _is_dead, dedupe_by_ats
+from copilot.storage import ALLOWED_STATUSES
 
 AQUATIC_DIRECT = "https://job-boards.greenhouse.io/aquaticcapitalmanagement/jobs/8489233002"
 AQUATIC_EMBED = ("https://job-boards.greenhouse.io/embed/job_app"
@@ -79,6 +80,41 @@ class TestWhichDuplicateSurvives:
             row(AQUATIC_EMBED, "Aquatic Capital", source_id="second"),
         ])
         assert kept[0]["source_id"] == "first"
+
+
+def dead_row(status="new", listing_state=None):
+    return {"status": status, "listing_state": listing_state}
+
+
+class TestWhatDropsOffTheTodoList:
+    def test_a_live_posting_stays(self):
+        assert _is_dead(dead_row(), include_closed=False) is False
+        assert _is_dead(dead_row("interested", "live"), include_closed=False) is False
+
+    def test_your_own_closed_finding_hides_it(self):
+        assert _is_dead(dead_row("closed"), include_closed=False) is True
+
+    def test_their_rejection_hides_it(self):
+        assert _is_dead(dead_row("rejected"), include_closed=False) is True
+
+    def test_an_employer_delisting_hides_it(self):
+        assert _is_dead(dead_row("new", "gone"), include_closed=False) is True
+
+    def test_never_checked_is_not_the_same_as_gone(self):
+        # NULL means we never asked; hiding those would erase most of the list.
+        assert _is_dead(dead_row("new", None), include_closed=False) is False
+
+    def test_applied_postings_stay_visible(self):
+        # You still want to see what you applied to.
+        assert _is_dead(dead_row("applied"), include_closed=False) is False
+
+    def test_include_closed_shows_everything(self):
+        for row in (dead_row("closed"), dead_row("rejected"), dead_row("new", "gone")):
+            assert _is_dead(row, include_closed=True) is False
+
+    def test_every_hidden_status_is_a_real_status(self):
+        for status in HIDDEN_STATUSES:
+            assert status in ALLOWED_STATUSES, status
 
 
 def test_surviving_rows_keep_their_original_order():
