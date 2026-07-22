@@ -17,6 +17,17 @@ def load_profile() -> dict:
     with open(PROFILE_PATH, "rb") as f:
         return tomllib.load(f)
     
+# Off the to-do list: one is your decision, one is theirs.
+HIDDEN_STATUSES = ("rejected", "closed")
+
+
+def _is_dead(row, include_closed: bool) -> bool:
+    """Postings not worth showing: closed by you, rejected, or delisted by the employer."""
+    if include_closed:
+        return False
+    return row["status"] in HIDDEN_STATUSES or row["listing_state"] == "gone"
+
+
 def _richer(candidate, incumbent) -> bool:
     """Which of two rows for the same job is worth keeping: the one we know more about."""
     def rank(row):
@@ -44,37 +55,40 @@ def dedupe_by_ats(rows) -> tuple[list, int]:
     return list(kept.values()), collapsed
 
 
-def matching_with_duplicates(conn) -> tuple[list, int]:
-    """Matching postings plus how many duplicate listings were folded away."""
-    return dedupe_by_ats(_matching_raw(conn))
+def matching_with_duplicates(conn, include_closed: bool = False) -> tuple[list, int, int]:
+    """Matching postings, duplicates folded, plus (collapsed, hidden) counts."""
+    raw, hidden = _matching_raw(conn, include_closed)
+    kept, collapsed = dedupe_by_ats(raw)
+    return kept, collapsed, hidden
 
 
-def matching_postings(conn) -> list:
-    """Postings matching profile.toml, one row per real job."""
-    return matching_with_duplicates(conn)[0]
+def matching_postings(conn, include_closed: bool = False) -> list:
+    """Postings matching profile.toml, one row per real job, dead ones dropped."""
+    return matching_with_duplicates(conn, include_closed)[0]
 
 
-def _matching_raw(conn) -> list:
-    """Every row matching the profile, duplicates included."""
+def _matching_raw(conn, include_closed: bool = False) -> tuple[list, int]:
+    """Every row matching the profile, duplicates included, plus how many were dead."""
     search = load_profile()["search"]
     keywords = [kw.lower() for kw in search["keywords"]]
     excludes = [ex.lower() for ex in search["exclude_keywords"]]
 
     rows = conn.execute(SELECT_SUMMER_SQL).fetchall()
-    result = []
+    result, hidden = [], 0
     for row in rows:
         title = row["title"].lower()
         if not any(kw in title for kw in keywords):
             continue  # no keyword hit -> not interesting
         if any(ex in title for ex in excludes):
             continue  # exclude wins even when a keyword hit
-        if row["status"] == "rejected":
+        if _is_dead(row, include_closed):
+            hidden += 1
             continue
         result.append(row)
-    return result
+    return result, hidden
 
-def report(conn) -> None:
-    rows, collapsed = matching_with_duplicates(conn)
+def report(conn, include_closed: bool = False) -> None:
+    rows, collapsed, hidden = matching_with_duplicates(conn, include_closed)
     for row in rows:
         first_location = json.loads(row["locations"])[0]
         score = row["score"] if row["score"] is not None else "-"
@@ -85,3 +99,6 @@ def report(conn) -> None:
     print(f"{len(rows)} matching Summer postings")
     if collapsed:
         print(f"({collapsed} duplicate listing(s) hidden - same job at the ATS under another URL)")
+    if hidden:
+        # Say so out loud: quietly dropping rows is how a to-do list starts lying.
+        print(f"({hidden} hidden as closed, rejected, or delisted - see them with --all)")

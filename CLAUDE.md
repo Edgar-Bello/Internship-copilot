@@ -388,3 +388,15 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   "Rio Grande" on their own widget), Anduril 11 filled, no regressions, 71
   tests green. NOTE for Edgar: IMC's "university email" field gets the personal
   email from identity.toml — worth checking before submitting.
+- 2026-07-22 (session 7, cont.9): retiring dead postings (79 tests).
+  New status "closed" = Edgar's own finding that a posting is gone, kept
+  separate from "rejected" (their decision about him) and from listing_state
+  (what the ATS told `check`). report now hides status in HIDDEN_STATUSES
+  ("rejected", "closed") AND listing_state == "gone", and prints how many it
+  hid — silent hiding would make the to-do list lie. `report --all` shows
+  everything. listing_state NULL still means "never asked" and stays visible.
+  matching_postings/matching_with_duplicates gained include_closed; scoring
+  inherits the default (no tokens on dead jobs) while checking passes
+  include_closed=True so `check --recheck` can still reach delisted rows.
+  Live result: 35 -> 30 shown, 5 hidden. Next open items unchanged: score
+  staleness, more sources, mojibake, argparse.
