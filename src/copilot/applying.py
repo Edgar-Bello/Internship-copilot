@@ -284,6 +284,22 @@ def _follow_apply_link(page) -> str | None:
     return None
 
 
+def looks_like_application_form(page) -> bool:
+    """Is this actually a job application, or just a page with an input on it?
+
+    Stoke Space's Greenhouse link redirects to their careers page, whose only
+    field is a newsletter box - and an unguarded pre-fill happily typed an email
+    address into a mailing list. Every real application asks for a name or a
+    resume; a subscribe box asks for neither.
+    """
+    for selector in ('[id*="first_name" i]', '[name*="first_name" i]',
+                     '[id*="last_name" i]', '[name*="last_name" i]',
+                     'input[type="file"]'):
+        if page.locator(selector).count():
+            return True
+    return False
+
+
 def _is_self_id(label: str) -> bool:
     lowered = label.lower()
     return any(needle in lowered for needle, _ in SELF_ID_RULES)
@@ -296,6 +312,10 @@ def prefill(page, identity: dict, client=None) -> tuple[list[str], list[str]]:
     from yours. It is never used for self-identification: those lists are short
     and legally meaningful, so if your words are not their words, you choose.
     """
+    if not looks_like_application_form(page):
+        # Refuse rather than scatter personal data into whatever inputs exist.
+        return [], []
+
     filled, skipped = [], []
     for label in page.locator("label[for]").all():
         target_id = label.get_attribute("for") or ""
@@ -397,15 +417,17 @@ def apply(conn, id_prefix: str) -> None:
             client = get_client()
             filled, skipped = prefill(page, identity, client=client)
             if not filled and not skipped:
-                # No labelled inputs at all: this is an advert page, so look for
-                # the way through to the form.
-                print("no form on this page - looking for an Apply link...")
+                # Either an advert page or something that is not an application
+                # at all. Look for a way through; fill nothing until we find one.
+                print("no application form here - looking for an Apply link...")
                 moved = _follow_apply_link(page)
                 if moved:
                     print(f"followed to: {moved}")
                     filled, skipped = prefill(page, identity, client=client)
-                else:
-                    print("could not find one - open it yourself from the page.")
+                if not filled and not skipped:
+                    print("still no application form on this page. Nothing was typed.")
+                    print("The posting may be closed - if so: "
+                          f"python -m copilot mark {posting['source_id'][:8]} closed")
             attachment = attach_resume(page, identity)
             if attachment:
                 print(f"\nresume: {attachment}")

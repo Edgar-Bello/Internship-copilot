@@ -3,7 +3,7 @@
 Usage:
   .venv\\Scripts\\python.exe -m copilot                          fetch + store, show new Summer postings
   .venv\\Scripts\\python.exe -m copilot report [--all]           ranked to-do list (--all includes closed/delisted)
-  .venv\\Scripts\\python.exe -m copilot shortlist                what is left to apply to, with scores and red flags
+  .venv\\Scripts\\python.exe -m copilot shortlist [--check]      what is left to apply to (--check re-asks each ATS first)
   .venv\\Scripts\\python.exe -m copilot mark <id-prefix> <status>  set a posting's status
   .venv\\Scripts\\python.exe -m copilot check [--recheck]        ask each ATS whether the job is still listed
   .venv\\Scripts\\python.exe -m copilot describe <id-prefix> [--file F]  store a description you pasted yourself
@@ -32,7 +32,13 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "report":
         report(get_connection(), include_closed="--all" in sys.argv)
     elif len(sys.argv) > 1 and sys.argv[1] == "shortlist":
-        score_report(get_connection())
+        conn = get_connection()
+        if "--check" in sys.argv:
+            # Re-ask every ATS we can query before listing, so postings that
+            # closed since the last run drop off instead of wasting your time.
+            check_listings(conn, recheck=True)
+            print()
+        score_report(conn)
     elif len(sys.argv) > 1 and sys.argv[1] == "mark":
         if len(sys.argv) < 4:
             print("usage: python -m copilot mark <id-prefix> <status>")
