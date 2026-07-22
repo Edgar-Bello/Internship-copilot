@@ -102,18 +102,25 @@ def _normalize(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 
-def _close_menu(page, field) -> None:
-    """Shut the dropdown before touching anything else.
+def _reset_field(page, field) -> None:
+    """Empty the box and shut the dropdown, in that order.
 
-    An open react-select menu paints its options over the rest of the form and
-    swallows clicks meant for the next field - Playwright then retries for 30s,
-    scrolling the page up and down, which is what it looks like from outside.
+    Order matters and getting it backwards is expensive: filling an input
+    refocuses it, which reopens react-select's menu. Closing first and clearing
+    second leaves the menu open, painted over the rest of the form, swallowing
+    the clicks meant for the next two fields. That is why one bad value used to
+    take its neighbours down with it.
     """
+    try:
+        field.fill("")
+    except Error:
+        pass
     field.press("Escape")
     try:
         page.locator(".select__option").first.wait_for(state="hidden", timeout=2000)
     except Error:
         page.keyboard.press("Escape")
+    page.wait_for_timeout(250)  # let the close finish; a closing menu still eats clicks
 
 
 def _choose_option(page, field, value: str) -> tuple[bool, str]:
@@ -129,6 +136,11 @@ def _choose_option(page, field, value: str) -> tuple[bool, str]:
     """
     field.scroll_into_view_if_needed()
     field.click()
+    # A click swallowed by a neighbour's closing menu leaves this field
+    # unfocused, and every keystroke then goes nowhere. Check, don't assume.
+    if not field.evaluate("el => el === document.activeElement"):
+        page.wait_for_timeout(400)
+        field.click()
     field.press_sequentially(value, delay=20)
     page.wait_for_timeout(800)  # let the menu render and filter
 
@@ -144,17 +156,28 @@ def _choose_option(page, field, value: str) -> tuple[bool, str]:
         matches = [0]
     if len(matches) == 1:
         options.nth(matches[0]).click()
-        chosen = seen[matches[0]]
-        _close_menu(page, field)
-        return True, chosen
+        return True, seen[matches[0]]
 
-    _close_menu(page, field)
-    field.fill("")
-    if count == 0:
-        return False, "no menu opened"
     if len(matches) > 1:
+        _reset_field(page, field)
         return False, f"{len(matches)} options match equally - pick one yourself"
-    return False, f"{count} offered, none matched - e.g. {'; '.join(seen[:3])}"
+
+    if count == 0:
+        # Zero visible options is ambiguous: the menu may never have opened, or
+        # the typed text may have filtered every choice away. Clear the filter
+        # and look again, so the message names the real problem.
+        field.fill("")
+        page.wait_for_timeout(500)
+        available = page.locator('[role="option"]:visible, .select__option:visible')
+        total = available.count()
+        offered = [(available.nth(i).inner_text() or "").strip() for i in range(min(total, 10))]
+        _reset_field(page, field)
+        if total:
+            return False, f"nothing here is called {value!r}; they offer: {'; '.join(offered)}"
+        return False, "the menu never opened"
+
+    _reset_field(page, field)
+    return False, f"{count} offered, none matched - e.g. {'; '.join(seen[:5])}"
 
 
 def attach_resume(page, identity: dict) -> str | None:

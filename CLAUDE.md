@@ -284,3 +284,25 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   answers that were set; blank self-ID and every legal declaration left alone.
   NOTE: Claude CAN test the form headless — only the headed window needs Edgar.
   Next: Edgar reruns `apply` (resume upload still unverified), then TESTS.
+- 2026-07-22 (session 7, cont.4): CASCADE BUG found and fixed. Edgar reported
+  Degree, Discipline and End-date-month failing — three CONSECUTIVE fields, which
+  was the clue. Reproduced headless: a failed combobox took its neighbours down
+  with it ("could not type"). Two causes, both in cleanup:
+  (1) cleanup called _close_menu THEN field.fill(""), but filling refocuses the
+  input and REOPENS react-select's menu — so cleanup left the menu open over the
+  next field. Order reversed into _reset_field (clear first, then Escape).
+  (2) Even closed correctly, the next click landed while the menu was still
+  animating shut and got swallowed, leaving that field unfocused so every
+  keystroke went nowhere (symptom: "nothing here is called X" listing the
+  UNFILTERED option list). Fixed with a 250ms settle after close plus an
+  activeElement check that re-clicks once if focus did not land.
+  Also: a count==0 result used to report "no menu opened" when the truth was
+  usually "your text filtered every option away" — now it clears the filter,
+  re-reads, and prints what the employer actually offers.
+  DATA FOR EDGAR: Greenhouse has NO "Bachelor of Science" — its list has
+  "Bachelors" and "Bachelor's Degree". Discipline offers "Computer Science".
+  Months are full names ("May"). Verified: with a deliberately wrong Degree,
+  School/Discipline/End-month/End-year all still fill.
+  Next: Edgar sets degree = "Bachelor's Degree", reruns, confirms resume upload.
+  Then TESTS — _normalize and the single-candidate rule now decide what lands on
+  a real application, and the only thing checking them is a hand-run probe.
