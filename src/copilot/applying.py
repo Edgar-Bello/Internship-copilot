@@ -100,6 +100,9 @@ def _normalize(text: str) -> str:
     and a leading 'the' are noise - the words are what identify it.
     """
     text = re.sub(r"^the\s+", "", text.strip().casefold())
+    # Apostrophes join a word, they do not split it: "Bachelor's" must reduce to
+    # "bachelors", not "bachelor s", or it stops matching "Bachelors".
+    text = text.replace("'", "").replace("’", "")
     return re.sub(r"[^a-z0-9]+", " ", text).strip()
 
 

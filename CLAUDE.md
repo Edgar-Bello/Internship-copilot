@@ -47,6 +47,8 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
 ## Dev environment
 
 - Windows 11, Python 3.14 (C:\Python314), venv at .venv (not committed)
+- Tests live in tests/, run offline in ~2s (no network, no API, no browser) —
+  they only exercise pure functions and a temp SQLite file.
 - Install: `.venv\Scripts\python.exe -m pip install -e ".[dev]"`
 - Tests: `.venv\Scripts\python.exe -m pytest`
 - Lint: `.venv\Scripts\python.exe -m ruff check .`
@@ -324,3 +326,21 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   Costs one small API call per unmatched combobox, none when wording already
   agrees. Edgar's earlier School failure was pre-cascade-fix; it fills now.
   Next: Edgar reruns `apply` (resume upload STILL unverified), then TESTS.
+- 2026-07-22 (session 7, cont.6): FIRST TESTS EXIST — 55 of them, ~2s, offline.
+  Edgar confirmed `apply` works end to end (all comboboxes + resume upload).
+  tests/: test_applying.py (NEVER_FILL holds against a full identity, self-ID is
+  opt-in and blank-safe, _is_self_id keeps the model away from demographics,
+  _normalize equivalences), test_descriptions.py (supports() and board-name
+  guessing on real URLs from the db — the thing that breaks silently when a
+  vendor changes a path shape), test_storage.py (ingest set-diff idempotence
+  incl. the Row-vs-tuple regression, (source, source_id) identity, feed-key
+  translation, status survives re-ingestion, ambiguous prefix rolls back
+  cleanly, description cache), test_sources.py (season filter incl. the
+  "Summer" != "Summer 2027" trap, _slug).
+  THE FIRST RUN FOUND A REAL BUG: _normalize turned "Bachelor's" into
+  "bachelor s", so a config saying "Bachelors Degree" could never match
+  Greenhouse's "Bachelor's Degree". Apostrophes are now stripped, not spaced.
+  That bug survived two rounds of hand-verification on the live form.
+  Storage tests use a tmp_path DB via monkeypatch on storage.DB_PATH; nothing
+  touches data/. Next: Edgar's call — more sources, dedupe by ATS job id
+  (Aquatic case), or the score-staleness fix (checked_at newer than scored_at).
