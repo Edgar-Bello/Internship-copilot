@@ -14,6 +14,8 @@ data/
 #Resume in plain text format, not markdown
 resume.md
 
+Edgar_Bello_Resume_Summer2026.pdf
+
 # Real personal details for form pre-fill. identity.example.toml IS committed
 # as the template; this one never is.
 identity.toml
