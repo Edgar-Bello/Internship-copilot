@@ -432,45 +432,64 @@ def apply(conn, id_prefix: str) -> None:
         page.goto(target, wait_until="domcontentloaded")
         print(f"\nopened: {page.title()[:80]}")
 
-        if IDENTITY_PATH.exists():
-            page.wait_for_timeout(1500)  # let the form's JS finish rendering
-            identity = load_identity()
-            client = get_client()
-            filled, skipped = prefill(page, identity, client=client)
-            if not filled and not skipped:
-                # Either an advert page, an embedded form, or not an application
-                # at all. Look for a way through; fill nothing until we find one.
-                print("no application form in this page - looking further...")
-                embedded = _embedded_form_url(page)
-                if embedded:
-                    print(f"the form is embedded from the ATS; opening it directly:\n  {embedded}")
-                    page.goto(embedded, wait_until="domcontentloaded")
-                    page.wait_for_timeout(2500)
-                    moved = embedded
-                else:
-                    moved = _follow_apply_link(page)  # navigates by itself
-                    if moved:
-                        print(f"followed an Apply link to: {moved}")
-                if moved:
-                    filled, skipped = prefill(page, identity, client=client)
-                if not filled and not skipped:
-                    print("still no application form on this page. Nothing was typed.")
-                    print("The posting may be closed - if so: "
-                          f"python -m copilot mark {posting['source_id'][:8]} closed")
-            attachment = attach_resume(page, identity)
-            if attachment:
-                print(f"\nresume: {attachment}")
-            print(f"\npre-filled {len(filled)} field(s):")
-            for item in filled:
-                print(f"  + {item}")
-            if skipped:
-                print(f"left for you ({len(skipped)}) - declarations, demographics, and anything ambiguous:")
-                for item in skipped:
-                    print(f"  - {item}")
-        else:
+        if not IDENTITY_PATH.exists():
             print(f"\nno {IDENTITY_PATH} yet - copy identity.example.toml to fill fields automatically")
+            input("Press Enter here when you're done to close the browser... ")
+            browser.close()
+            return
 
-        print("\nNothing has been submitted. Check every field, answer the rest,")
-        print("attach your resume, and click submit yourself.")
-        input("Press Enter here when you're done to close the browser... ")
+        page.wait_for_timeout(1500)  # let the form's JS finish rendering
+        identity = load_identity()
+        client = get_client()
+        _fill_and_report(page, identity, client, posting)
+
+        # Some sites put a step in front of the form - an email gate, a login,
+        # a bot check. We do not drive through those: you do, then ask again.
+        # This also covers multi-page applications and anything we cannot guess.
+        print("\nNothing has been submitted. Check every field and answer the rest.")
+        while True:
+            answer = input("[Enter] fill the page now on screen, or 'q' to close the browser: ")
+            if answer.strip().lower() in {"q", "quit", "exit"}:
+                break
+            _fill_and_report(page, identity, client, posting)
         browser.close()
+        return
+
+
+def _fill_and_report(page, identity, client, posting) -> None:
+    """Fill whatever application form is on screen right now, and say what happened."""
+    filled, skipped = prefill(page, identity, client=client)
+
+    if not filled and not skipped:
+        # An advert page, an embedded form, or not an application at all. Look
+        # for a way through; nothing is typed until a real form is in front of us.
+        print("no application form in this page - looking further...")
+        embedded = _embedded_form_url(page)
+        if embedded:
+            print(f"the form is embedded from the ATS; opening it directly:\n  {embedded}")
+            page.goto(embedded, wait_until="domcontentloaded")
+            page.wait_for_timeout(2500)
+            moved = embedded
+        else:
+            moved = _follow_apply_link(page)  # navigates by itself
+            if moved:
+                print(f"followed an Apply link to: {moved}")
+        if moved:
+            filled, skipped = prefill(page, identity, client=client)
+        if not filled and not skipped:
+            print("still no application form here. Nothing was typed.")
+            print("If the site asks for something first - an email, a login, a bot check -")
+            print("do that yourself in the window, then press Enter here to fill the form.")
+            print(f"If the posting is closed: python -m copilot mark {posting['source_id'][:8]} closed")
+            return
+
+    attachment = attach_resume(page, identity)
+    if attachment:
+        print(f"\nresume: {attachment}")
+    print(f"\npre-filled {len(filled)} field(s):")
+    for item in filled:
+        print(f"  + {item}")
+    if skipped:
+        print(f"left for you ({len(skipped)}) - declarations, demographics, and anything ambiguous:")
+        for item in skipped:
+            print(f"  - {item}")

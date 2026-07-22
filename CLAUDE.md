@@ -448,3 +448,21 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   LESSON: two consecutive wrong diagnoses from Claude here ("press_sequentially
   will fix it", "there is no form") were both settled by Edgar running the real
   thing. Treat Claude's headless probe as evidence about the main frame only.
+- 2026-07-22 (session 7, cont.13): REFILL LOOP instead of driving through gates.
+  Edgar hit Susquehanna (2cfe2e3b), where an email step sits in front of the
+  form, and asked the tool to fill and click it. FINDING: careers.sig.com
+  returns 403 Forbidden to a headless browser — the site screens for automation.
+  So Claude cannot verify anything there, and having the tool type into a gate
+  and click through on a bot-screened site risks flagging Edgar's real session.
+  Declined that; built the general fix instead: after the first pass, `apply`
+  loops on "[Enter] fill the page now on screen, or 'q' to close". Edgar clears
+  whatever the site puts in the way — email gate, login, bot check, page 2 of a
+  multi-step form — and the tool fills whatever is in front of it, on request.
+  This is the co-pilot principle in the UI: he navigates, it assists on demand.
+  apply() was restructured: _fill_and_report(page, identity, client, posting)
+  holds the prefill + fallback chain + reporting, and is called once up front
+  and again on every Enter. Verified on Anduril with the real identity.toml.
+  DATA FOR EDGAR: his disability_status = "No" matches nothing at Anduril, which
+  offers "No, I do not have a disability and have not had one in the past" and
+  "I do not want to answer" — self-ID never uses the model, so wording must be
+  theirs. The failure message now prints their options.
