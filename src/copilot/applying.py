@@ -473,8 +473,11 @@ def _open_browser(p):
     BROWSER_PROFILE.mkdir(parents=True, exist_ok=True)
     for kwargs in ({"channel": "chrome"}, {}):
         try:
+            # chromium_sandbox=True keeps Chromium's security sandbox on. Playwright
+            # turns it OFF by default (the "--no-sandbox / security will suffer"
+            # banner); there is no reason to browse real job sites unprotected.
             return p.chromium.launch_persistent_context(
-                str(BROWSER_PROFILE), headless=False, **kwargs
+                str(BROWSER_PROFILE), headless=False, chromium_sandbox=True, **kwargs
             )
         except Error:
             continue
