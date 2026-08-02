@@ -485,3 +485,17 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   fold automatically (hidden duplicates went 1 -> 3) because ats_key already
   proves identity across sources. 35 of the 59 are unscored — next run of
   `score` picks them up.
+- 2026-07-22 (session 7, cont.15): HANDLE bug from the second source (98 tests).
+  Edgar saw many postings sharing an id that was an English word ("greenhou",
+  "workday:", "smartrec"). Cause: the CLI reference was source_id[:8], fine for
+  vanshb03 UUIDs but broken for zshah101's "ats:board:jobid" ids whose first 8
+  chars are just the vendor. Fix: a `handle` column. make_handle keeps
+  source_id[:8] when there is no colon (vanshb UUIDs unchanged — e6ef564e is
+  still Anduril) and sha1[:8] otherwise (structured ids). Added to CREATE_SQL +
+  MIGRATIONS + INSERT; _backfill_handles computes it for pre-existing rows
+  (SQLite has no sha1, and the rule lives in Python — NULL-only, idempotent).
+  All lookups (set_status, set_description, draft/apply SELECT_ONE) and every
+  display + the todo_scores view now use handle, not source_id[:8]. Draft
+  filenames too. VERIFIED on the real db: 594 rows, 594 distinct handles, 0
+  NULL, vanshb handles unchanged. Next open items: score staleness, mojibake,
+  argparse.

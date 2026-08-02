@@ -110,6 +110,58 @@ class TestStatusIsPreciousState:
         assert storage.set_status(conn, "zzz", "applied") == 0
 
 
+class TestHandle:
+    """The short reference the CLI shows and accepts. Must be distinctive."""
+
+    def test_a_uuid_id_keeps_its_first_eight_chars(self):
+        # vanshb03 ids are UUIDs; these handles were already in use and must not change.
+        assert storage.make_handle("vanshb03", "e6ef564e-5028-431b-97ed-0154893db99f") == "e6ef564e"
+
+    def test_structured_ats_ids_do_not_collide_on_the_vendor_name(self):
+        # The bug: every zshah101 Greenhouse id starts "greenhouse:", so the old
+        # source_id[:8] made them all "greenhou".
+        anduril = storage.make_handle("zshah101", "greenhouse:andurilindustries:5148079007")
+        akuna = storage.make_handle("zshah101", "greenhouse:akunacapital:8018847")
+        assert anduril != akuna
+        assert "greenhou" not in (anduril, akuna)
+
+    def test_a_handle_is_eight_characters(self):
+        for source_id in ("greenhouse:imc:4823924101", "workday:adobe:/job/x/y_R1", "abc"):
+            assert len(storage.make_handle("zshah101", source_id)) <= 8
+
+    def test_the_same_posting_always_hashes_the_same(self):
+        first = storage.make_handle("zshah101", "greenhouse:imc:4823924101")
+        second = storage.make_handle("zshah101", "greenhouse:imc:4823924101")
+        assert first == second
+
+    def test_ingest_stores_a_handle_for_every_row(self, conn):
+        storage.ingest(conn, "zshah101", [feed_row("greenhouse:imc:4823924101")])
+        row = conn.execute("SELECT handle FROM postings").fetchone()
+        assert row["handle"] == storage.make_handle("zshah101", "greenhouse:imc:4823924101")
+
+    def test_two_greenhouse_postings_get_different_handles_end_to_end(self, conn):
+        storage.ingest(conn, "zshah101", [
+            feed_row("greenhouse:andurilindustries:5148079007"),
+            feed_row("greenhouse:akunacapital:8018847"),
+        ])
+        handles = [r["handle"] for r in conn.execute("SELECT handle FROM postings")]
+        assert len(set(handles)) == 2
+
+    def test_you_can_mark_a_structured_posting_by_its_handle(self, conn):
+        storage.ingest(conn, "zshah101", [feed_row("greenhouse:imc:4823924101")])
+        handle = storage.make_handle("zshah101", "greenhouse:imc:4823924101")
+        assert storage.set_status(conn, handle, "applied") == 1
+
+    def test_backfill_fills_rows_that_predate_the_column(self, conn):
+        # Simulate an old database: a row with a NULL handle.
+        conn.execute("UPDATE postings SET handle = NULL")
+        storage.ingest(conn, "vanshb03", [feed_row("a")])  # ensure a row exists
+        conn.execute("UPDATE postings SET handle = NULL")
+        conn.commit()
+        storage._backfill_handles(conn)
+        assert conn.execute("SELECT COUNT(*) FROM postings WHERE handle IS NULL").fetchone()[0] == 0
+
+
 class TestDescriptionCache:
     def test_a_pasted_description_marks_the_listing_live(self, conn):
         storage.ingest(conn, "vanshb03", [feed_row("a")])

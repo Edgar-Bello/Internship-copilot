@@ -1,3 +1,4 @@
+import hashlib
 import json
 import pathlib
 import sqlite3
@@ -5,11 +6,25 @@ from datetime import datetime, timezone
 
 DB_PATH = pathlib.Path("data/copilot.db")
 
+
+def make_handle(source: str, source_id: str) -> str:
+    """A short, stable, distinctive reference for a posting - what the CLI shows.
+
+    vanshb03 ids are UUIDs, so their first 8 chars already identify a posting.
+    zshah101 ids are "ats:board:jobid", whose first 8 chars are just the vendor
+    name ("greenhou", "workday:") - useless as a handle - so those are hashed.
+    The rule keys off the colon that only the structured ids contain, which
+    leaves every id the user already knows untouched.
+    """
+    if ":" not in source_id:
+        return source_id[:8]
+    return hashlib.sha1(f"{source}:{source_id}".encode()).hexdigest()[:8]
+
 CREATE_SQL = """CREATE TABLE IF NOT EXISTS postings (
 source TEXT, source_id TEXT, company TEXT, title TEXT, url TEXT, locations TEXT,
 season TEXT, sponsorship TEXT, active INTEGER, is_visible INTEGER, date_posted INTEGER,
 first_seen TEXT, status TEXT NOT NULL DEFAULT 'new',
-listing_state TEXT, checked_at TEXT, description TEXT,
+listing_state TEXT, checked_at TEXT, description TEXT, handle TEXT,
 PRIMARY KEY (source, source_id))"""
 
 # Columns added after the table already existed somewhere. Kept beside CREATE_SQL
@@ -22,12 +37,13 @@ MIGRATIONS = (
     ("listing_state", "TEXT"),
     ("checked_at", "TEXT"),
     ("description", "TEXT"),
+    ("handle", "TEXT"),  # backfilled below; NULL only until then
 )
 
 INSERT_SQL = """INSERT INTO postings (
     source, source_id, company, title, url, locations,
-    season, sponsorship, active, is_visible, date_posted, first_seen
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+    season, sponsorship, active, is_visible, date_posted, first_seen, handle
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
 
 CREATE_SCORES_SQL = """CREATE TABLE IF NOT EXISTS scores (
     source TEXT, source_id TEXT, score INTEGER, rationale TEXT, emphasize TEXT, 
@@ -45,7 +61,7 @@ ALLOWED_STATUSES = ("new", "seen", "interested", "applied", "rejected", "closed"
 # SQL here cannot do, so this shows one extra row per duplicated job. Use
 # `python -m copilot shortlist` for the real list.
 TODO_SCORES_VIEW = """CREATE VIEW todo_scores AS
-SELECT substr(p.source_id, 1, 8) AS id, s.score, p.company, p.title, p.status,
+SELECT p.handle AS id, s.score, p.company, p.title, p.status,
        p.sponsorship, s.red_flags, s.rationale, p.url
 FROM postings p
 JOIN scores s ON s.source = p.source AND s.source_id = p.source_id
@@ -60,10 +76,30 @@ def get_connection() -> sqlite3.Connection:
     connection.execute(CREATE_SQL)
     for column, ddl in MIGRATIONS:
         _ensure_column(connection, "postings", column, ddl)
+    _backfill_handles(connection)
     connection.execute(CREATE_SCORES_SQL)
     connection.execute("DROP VIEW IF EXISTS todo_scores")
     connection.execute(TODO_SCORES_VIEW)
     return connection
+
+
+def _backfill_handles(connection: sqlite3.Connection) -> None:
+    """Compute the handle for rows that predate the column.
+
+    SQLite has no sha1(), and the rule lives in Python anyway, so the backfill
+    runs here rather than in SQL. Only touches NULLs, so it is a no-op after the
+    first run - the same once-and-idempotent shape as the migrations above.
+    """
+    missing = connection.execute(
+        "SELECT source, source_id FROM postings WHERE handle IS NULL"
+    ).fetchall()
+    for row in missing:
+        connection.execute(
+            "UPDATE postings SET handle = ? WHERE source = ? AND source_id = ?",
+            (make_handle(row["source"], row["source_id"]), row["source"], row["source_id"]),
+        )
+    if missing:
+        connection.commit()
 
 def _ensure_column(connection: sqlite3.Connection, table: str, column: str, ddl: str) -> None:
     """Add a column to an existing table if it is missing. Safe on every startup.
@@ -85,7 +121,7 @@ def set_status(conn, source_id_prefix: str, status: str) -> int:
     mass-update lookalike postings (the Kudu case), so anything else rolls back.
     """
     cursor = conn.execute(
-        "UPDATE postings SET status = ? WHERE source_id LIKE ?",
+        "UPDATE postings SET status = ? WHERE handle LIKE ?",
         (status, f"{source_id_prefix}%"),
     )
     if cursor.rowcount == 1:
@@ -112,9 +148,10 @@ def ingest(conn: sqlite3.Connection, source_name: str, postings: list[dict]) -> 
         if identity in known:
             continue
         conn.execute(INSERT_SQL, (
-            # json.dumps(...) for locations; the first_seen variable for the last slot.
+            # json.dumps(...) for locations; the first_seen variable, then the handle.
             source_name, posting["id"], posting["company_name"], posting["title"], posting["url"], json.dumps(posting["locations"]),
-            posting["season"], posting["sponsorship"], int(posting["active"]), int(posting["is_visible"]), posting["date_posted"], first_seen
+            posting["season"], posting["sponsorship"], int(posting["active"]), int(posting["is_visible"]), posting["date_posted"], first_seen,
+            make_handle(source_name, posting["id"]),
         ))
         new.append(posting)
 
@@ -143,7 +180,7 @@ def set_description(conn, source_id_prefix: str, text: str) -> int:
     """
     cursor = conn.execute(
         "UPDATE postings SET description = ?, listing_state = 'live', checked_at = ? "
-        "WHERE source_id LIKE ?",
+        "WHERE handle LIKE ?",
         (text, datetime.now(timezone.utc).isoformat(), f"{source_id_prefix}%"),
     )
     if cursor.rowcount == 1:

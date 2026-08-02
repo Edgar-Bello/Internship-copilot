@@ -23,7 +23,7 @@ from copilot.llm import get_client, match_option
 SELECT_ONE_SQL = """SELECT p.*, s.score, s.red_flags
 FROM postings p
 LEFT JOIN scores s ON s.source = p.source AND s.source_id = p.source_id
-WHERE p.source_id LIKE ?"""
+WHERE p.handle LIKE ?"""
 
 IDENTITY_PATH = pathlib.Path("identity.toml")
 
@@ -390,11 +390,11 @@ def _briefing(posting) -> None:
         for flag in flags:
             print(f"    - {flag}")
 
-    draft_path = DRAFTS_DIR / f"{_slug(posting['company'])}-{posting['source_id'][:8]}.md"
+    draft_path = DRAFTS_DIR / f"{_slug(posting['company'])}-{posting['handle']}.md"
     if draft_path.exists():
         print(f"  your draft: {draft_path}")
     else:
-        print(f"  no draft yet - run: python -m copilot draft {posting['source_id'][:8]}")
+        print(f"  no draft yet - run: python -m copilot draft {posting['handle']}")
 
 
 def apply(conn, id_prefix: str) -> None:
@@ -480,7 +480,7 @@ def _fill_and_report(page, identity, client, posting) -> None:
             print("still no application form here. Nothing was typed.")
             print("If the site asks for something first - an email, a login, a bot check -")
             print("do that yourself in the window, then press Enter here to fill the form.")
-            print(f"If the posting is closed: python -m copilot mark {posting['source_id'][:8]} closed")
+            print(f"If the posting is closed: python -m copilot mark {posting['handle']} closed")
             return
 
     attachment = attach_resume(page, identity)

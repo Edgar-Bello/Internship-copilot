@@ -96,7 +96,7 @@ def score_report(conn) -> None:
     rows = [row for row in matching_postings(conn) if row["status"] != "applied"]
     for row in rows:
         score = row["score"] if row["score"] is not None else "-"
-        print(f"\n[{score}] {row['source_id'][:8]}  {row['company']} - {row['title']}")
+        print(f"\n[{score}] {row['handle']}  {row['company']} - {row['title']}")
         print(f"      {row['status']} | {json.loads(row['locations'])[0]} | {row['url']}")
         for flag in json.loads(row["red_flags"]) if row["red_flags"] else []:
             print(f"      ! {flag}")
@@ -113,7 +113,7 @@ def report(conn, include_closed: bool = False) -> None:
         score = row["score"] if row["score"] is not None else "-"
         # "GONE" only when we actually asked and were told no; never-checked stays quiet.
         listing = " GONE" if row["listing_state"] == "gone" else ""
-        print(f"{row['source_id'][:8]} - {row['status']}{listing}")
+        print(f"{row['handle']} - {row['status']}{listing}")
         print(f"{row['company']} - {row['title']} - {first_location} - score: {score}")
     print(f"{len(rows)} matching Summer postings")
     if collapsed:
