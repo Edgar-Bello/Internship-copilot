@@ -410,20 +410,19 @@ def apply(conn, id_prefix: str) -> None:
     _briefing(posting)
 
     with sync_playwright() as p:
-        browser = _launch(p)
-        if browser is None:
+        context = _open_browser(p)
+        if context is None:
             print("\ncould not open a browser window on this machine.")
             print("A visible browser needs a desktop session - run this from your own")
             print(f"terminal. Open the link yourself:\n  {posting['url']}")
             return
-        context = browser.new_context()
         # Two different clocks: navigations get a generous budget (a cold career
         # page can take 20s+), while individual actions stay short so a stuck
         # combobox fails fast instead of thrashing the page. Setting the 8s
         # default on navigation was why a second URL "never loaded".
         context.set_default_timeout(8000)
         context.set_default_navigation_timeout(45000)
-        page = context.new_page()
+        page = context.pages[0] if context.pages else context.new_page()
 
         # The feed often links the advert, not the form. When the advert's URL
         # still carries the ATS job id, go straight to the form instead.
@@ -436,7 +435,7 @@ def apply(conn, id_prefix: str) -> None:
         if not IDENTITY_PATH.exists():
             print(f"\nno {IDENTITY_PATH} yet - copy identity.example.toml to fill fields automatically")
             input("Press Enter here when you're done to close the browser... ")
-            browser.close()
+            context.close()
             return
 
         page.wait_for_timeout(1500)  # let the form's JS finish rendering
@@ -454,20 +453,29 @@ def apply(conn, id_prefix: str) -> None:
             if answer.strip().lower() in {"q", "quit", "exit"}:
                 break
             _fill_and_report(_active_page(context), identity, client, posting)
-        browser.close()
+        context.close()
         return
 
 
-def _launch(p):
-    """Open a visible browser, preferring the real Chrome the user already trusts.
+BROWSER_PROFILE = pathlib.Path("data/browser-profile")
 
-    Playwright's bundled Chromium runs a clean profile that some sites treat
-    differently; the user's installed Chrome behaves like the browser where the
-    link worked. Fall back to bundled Chromium, then give up (no desktop session).
+
+def _open_browser(p):
+    """Open a visible browser that REMEMBERS you between runs.
+
+    A persistent profile keeps cookies across runs, so a bot-check clearance you
+    pass by hand once is remembered next time instead of re-challenging every
+    visit. This is ordinary cookie persistence - the same thing your normal
+    browser does - not an attempt to defeat the check itself, which the tool
+    never does. Prefer the real Chrome the user trusts; fall back to bundled
+    Chromium; give up if there is no desktop session.
     """
+    BROWSER_PROFILE.mkdir(parents=True, exist_ok=True)
     for kwargs in ({"channel": "chrome"}, {}):
         try:
-            return p.chromium.launch(headless=False, **kwargs)
+            return p.chromium.launch_persistent_context(
+                str(BROWSER_PROFILE), headless=False, **kwargs
+            )
         except Error:
             continue
     return None
@@ -519,10 +527,15 @@ def _fill_and_report(page, identity, client, posting) -> None:
         if moved:
             filled, skipped = prefill(page, identity, client=client)
         if not filled and not skipped:
+            draft_path = DRAFTS_DIR / f"{_slug(posting['company'])}-{posting['handle']}.md"
             print("still no application form here. Nothing was typed.")
             print("If the site asks for something first - an email, a login, a bot check -")
             print("do that yourself in the window, then press Enter here to fill the form.")
-            print(f"If the posting is closed: python -m copilot mark {posting['handle']} closed")
+            print("Some sites (SIG, Citadel) block automated browsers no matter what. If this")
+            print("stays stuck, apply in your normal Chrome - everything you need is ready:")
+            if draft_path.exists():
+                print(f"  cover letter + checklist: {draft_path}")
+            print(f"  or mark it closed: python -m copilot mark {posting['handle']} closed")
             return
 
     attachment = attach_resume(page, identity)

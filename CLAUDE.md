@@ -513,3 +513,19 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   one Edgar navigated to himself, gets filled (before, it always re-filled the
   original page). Switched browser.new_page() -> explicit context so the two
   timeouts and new-tab tracking apply. 98 tests still green (all offline).
+- 2026-07-22 (session 7, cont.17): BOT-WALL boundary. Timeout fix worked (second
+  URL loads now), but the chain led to a "prove you're not a bot" page and then
+  a third URL that failed. This is bot detection (SIG/Citadel class). HARD LINE
+  restated to Edgar and honored: NO CAPTCHA solving, NO code to defeat bot
+  checks — Playwright announces itself at the protocol level and these sites
+  block it regardless. The ONE legitimate lever, added: persistent profile.
+  _open_browser now uses launch_persistent_context(data/browser-profile) so a
+  clearance cookie Edgar passes by hand ONCE is remembered next run instead of
+  re-challenging — ordinary cookie persistence, not evasion. Profile dir lives
+  under data/ (already gitignored, cookies never committed). Also: the "still no
+  form" message now names SIG/Citadel as unwinnable and points Edgar to apply in
+  his own Chrome using the draft file the tool already wrote. Expectation set:
+  the most aggressive sites will never work in a controlled browser; for those
+  the tool's value is the letter + red-flag checklist + identity data, not the
+  fill. NOTE: launch_persistent_context returns a context (no separate browser);
+  close via context.close(). Headed path still Edgar-only to verify.
