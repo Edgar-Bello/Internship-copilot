@@ -410,26 +410,27 @@ def apply(conn, id_prefix: str) -> None:
     _briefing(posting)
 
     with sync_playwright() as p:
-        # headless=False on purpose: this is your browser session, not a scraper.
-        try:
-            browser = p.chromium.launch(headless=False)
-        except Error as exc:
-            print(f"\ncould not open a browser window: {exc.message.splitlines()[0]}")
+        browser = _launch(p)
+        if browser is None:
+            print("\ncould not open a browser window on this machine.")
             print("A visible browser needs a desktop session - run this from your own")
-            print("terminal, not a service or remote shell. Open the link above manually:")
-            print(f"  {posting['url']}")
+            print(f"terminal. Open the link yourself:\n  {posting['url']}")
             return
-        page = browser.new_page()
-        # Fail fast: the default 30s turns one stuck field into half a minute
-        # of the page scrolling itself while Playwright retries.
-        page.set_default_timeout(8000)
+        context = browser.new_context()
+        # Two different clocks: navigations get a generous budget (a cold career
+        # page can take 20s+), while individual actions stay short so a stuck
+        # combobox fails fast instead of thrashing the page. Setting the 8s
+        # default on navigation was why a second URL "never loaded".
+        context.set_default_timeout(8000)
+        context.set_default_navigation_timeout(45000)
+        page = context.new_page()
 
         # The feed often links the advert, not the form. When the advert's URL
         # still carries the ATS job id, go straight to the form instead.
         target = application_url(posting["url"], posting["company"]) or posting["url"]
         if target != posting["url"]:
             print(f"\nthe link is an advert; the form is at:\n  {target}")
-        page.goto(target, wait_until="domcontentloaded")
+        _safe_goto(page, target)
         print(f"\nopened: {page.title()[:80]}")
 
         if not IDENTITY_PATH.exists():
@@ -444,16 +445,55 @@ def apply(conn, id_prefix: str) -> None:
         _fill_and_report(page, identity, client, posting)
 
         # Some sites put a step in front of the form - an email gate, a login,
-        # a bot check. We do not drive through those: you do, then ask again.
-        # This also covers multi-page applications and anything we cannot guess.
+        # a bot check, or a link that opens the form in a new tab. We do not
+        # drive through those: you do, then ask again. Each pass fills whatever
+        # tab is now in front, so a new tab or a page you navigated is handled.
         print("\nNothing has been submitted. Check every field and answer the rest.")
         while True:
             answer = input("[Enter] fill the page now on screen, or 'q' to close the browser: ")
             if answer.strip().lower() in {"q", "quit", "exit"}:
                 break
-            _fill_and_report(page, identity, client, posting)
+            _fill_and_report(_active_page(context), identity, client, posting)
         browser.close()
         return
+
+
+def _launch(p):
+    """Open a visible browser, preferring the real Chrome the user already trusts.
+
+    Playwright's bundled Chromium runs a clean profile that some sites treat
+    differently; the user's installed Chrome behaves like the browser where the
+    link worked. Fall back to bundled Chromium, then give up (no desktop session).
+    """
+    for kwargs in ({"channel": "chrome"}, {}):
+        try:
+            return p.chromium.launch(headless=False, **kwargs)
+        except Error:
+            continue
+    return None
+
+
+def _active_page(context):
+    """The tab currently in front - so a form opened in a new tab gets filled."""
+    live = [pg for pg in context.pages if not pg.is_closed()]
+    page = live[-1] if live else context.new_page()
+    try:
+        page.bring_to_front()
+    except Error:
+        pass
+    return page
+
+
+def _safe_goto(page, url) -> bool:
+    """Navigate, but never let a slow or blocking page crash the run."""
+    try:
+        page.goto(url, wait_until="domcontentloaded")
+        return True
+    except Error as exc:
+        print(f"\nthat page did not finish loading: {exc.message.splitlines()[0][:80]}")
+        print("It may be slow or screening automation. Open it yourself in the window,")
+        print("then press Enter here to fill it.")
+        return False
 
 
 def _fill_and_report(page, identity, client, posting) -> None:
@@ -467,9 +507,11 @@ def _fill_and_report(page, identity, client, posting) -> None:
         embedded = _embedded_form_url(page)
         if embedded:
             print(f"the form is embedded from the ATS; opening it directly:\n  {embedded}")
-            page.goto(embedded, wait_until="domcontentloaded")
-            page.wait_for_timeout(2500)
-            moved = embedded
+            if _safe_goto(page, embedded):
+                page.wait_for_timeout(2500)
+                moved = embedded
+            else:
+                moved = None
         else:
             moved = _follow_apply_link(page)  # navigates by itself
             if moved:

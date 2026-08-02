@@ -499,3 +499,17 @@ DEEPLY, not to receive finished code. Act as a one-on-one mentor:
   filenames too. VERIFIED on the real db: 594 rows, 594 distinct handles, 0
   NULL, vanshb handles unchanged. Next open items: score staleness, mojibake,
   argparse.
+- 2026-07-22 (session 7, cont.16): "second URL never loads" in the apply browser.
+  ROOT CAUSE (Claude's own): page.set_default_timeout(8000), added to fail fast
+  on stuck comboboxes, ALSO caps page.goto — so the second navigation (advert ->
+  form, or the embedded form) got only 8s and timed out on heavy career pages.
+  Fixes, all in applying.py, UNVERIFIED headed (Edgar must run): split the clocks
+  — context.set_default_timeout(8000) for actions, set_default_navigation_timeout
+  (45000) for gotos. _safe_goto wraps navigations so a slow/blocking page prints
+  a message and drops into the manual loop instead of crashing. _launch tries
+  channel="chrome" (the real Chrome the user trusts) before bundled Chromium,
+  since Edgar said the link works in his regular Chrome. Refill loop now fills
+  _active_page(context) — the frontmost tab — so a form opened in a NEW TAB, or
+  one Edgar navigated to himself, gets filled (before, it always re-filled the
+  original page). Switched browser.new_page() -> explicit context so the two
+  timeouts and new-tab tracking apply. 98 tests still green (all offline).
